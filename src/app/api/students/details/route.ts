@@ -8,15 +8,21 @@ export async function GET(req: Request) {
   if (!id) return NextResponse.json({ error: "ID necessário" }, { status: 400 });
 
   try {
-    // O '*' garante que ele pegue weight e height que acabamos de criar
     const student = await sql`
-      SELECT * FROM public.profiles 
-      WHERE id = ${id}::uuid
+      SELECT 
+        id, full_name, email, goal, weight, height, age,
+        meal_count, meal_flexibility, disliked_foods, allergies, 
+        supplements, wake_time, work_start, work_end, 
+        train_time, sleep_time, routine, digestive_health,
+        "photoUrl" as "photoUrl", 
+        "photoPosition" as "photoPosition" 
+      FROM public.profiles 
+      WHERE id = ${id}::uuid 
       LIMIT 1
     `;
-
-    return NextResponse.json(student[0]);
+    return NextResponse.json(student[0] || null);
   } catch (error) {
-    return NextResponse.json({ error: "Erro ao buscar detalhes" }, { status: 500 });
+    console.error("Erro ao buscar detalhes:", error);
+    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }

@@ -7,9 +7,17 @@ import { Save, ArrowLeft, Trash2, Calculator, Search, Plus, CheckCircle, X, File
 export default function EditorProPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { id } = use(params);
-  const [meals, setMeals] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   
+  // NOVO: Estado de Protocolos (Substitui o estado simples de 'meals')
+  const [protocols, setProtocols] = useState<any[]>([{ 
+      id: 'default', 
+      name: 'Protocolo Base', 
+      activeDays: [0, 1, 2, 3, 4, 5, 6], // 0 = Domingo, 1 = Segunda...
+      meals: [] 
+  }]);
+  const [activeProtocolIndex, setActiveProtocolIndex] = useState(0);
+
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [activeMealIndex, setActiveMealIndex] = useState<number | null>(null);
@@ -38,6 +46,11 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
       "Pré-Treino", "Pós-Treino", "Jantar", "Ceia"
   ];
 
+  const weekDays = [
+      { idx: 0, label: 'Dom' }, { idx: 1, label: 'Seg' }, { idx: 2, label: 'Ter' },
+      { idx: 3, label: 'Qua' }, { idx: 4, label: 'Qui' }, { idx: 5, label: 'Sex' }, { idx: 6, label: 'Sáb' }
+  ];
+
   const unitConversions: {[key: string]: number} = {
       'g': 1, 'ml': 1, 'un': 1, 
       'fatia': 25, 'colher': 20, 'xicara': 150, 'scoop': 30
@@ -45,12 +58,9 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
 
   const [activeCategory, setActiveCategory] = useState('proteina');
 
-  useEffect(() => {
-    async function loadDiet() {
-      const res = await fetch(`/api/diet/latest?studentId=${id}`);
-      if (res.ok) {
-        const data = await res.json();
-        const normalizedMeals = data.map((meal: any) => ({
+  // Helper para normalizar as refeições, seja de dados novos ou antigos
+  const normalizeMeals = (mealsArray: any[]) => {
+      return mealsArray.map((meal: any) => ({
           ...meal,
           observations: meal.observations || "", 
           items: Array.isArray(meal.items) ? meal.items.map((item: any) => {
@@ -64,8 +74,30 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
               substitutes: Array.isArray(item.substitutes) ? item.substitutes : [] 
             };
           }) : []
-        }));
-        setMeals(normalizedMeals);
+      }));
+  };
+
+  useEffect(() => {
+    async function loadDiet() {
+      const res = await fetch(`/api/diet/latest?studentId=${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+            // Verifica se é o formato NOVO (Array de Protocolos) ou ANTIGO (Array de Refeições)
+            if (!data[0].meals) {
+                // Formato antigo: Converte as refeições para dentro de um "Protocolo Base"
+                setProtocols([{ 
+                    id: 'default', name: 'Protocolo Base', activeDays: [0, 1, 2, 3, 4, 5, 6], 
+                    meals: normalizeMeals(data) 
+                }]);
+            } else {
+                // Formato Novo: Carrega os protocolos e normaliza as refeições de cada um
+                setProtocols(data.map((p: any) => ({
+                    ...p,
+                    meals: normalizeMeals(p.meals)
+                })));
+            }
+        }
       }
       setLoading(false);
     }
@@ -80,12 +112,37 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
     fetch(url).then(res => res.json()).then(data => setSearchResults(data));
   }, [searchTerm, activeCategory]);
 
+  // --- FUNÇÕES DE GERENCIAMENTO DE PROTOCOLOS ---
+  const addProtocol = () => {
+      setProtocols([...protocols, { 
+          id: Date.now().toString(), 
+          name: `Protocolo ${protocols.length + 1}`, 
+          activeDays: [], 
+          meals: [] 
+      }]);
+      setActiveProtocolIndex(protocols.length);
+  };
+
+  const toggleDay = (dayIndex: number) => {
+      const n = [...protocols];
+      const days = n[activeProtocolIndex].activeDays;
+      if (days.includes(dayIndex)) {
+          n[activeProtocolIndex].activeDays = days.filter((d: number) => d !== dayIndex);
+      } else {
+          n[activeProtocolIndex].activeDays.push(dayIndex);
+      }
+      setProtocols(n);
+  };
+
+  // --- FUNÇÕES DE REFEIÇÕES (Agora atuam no Protocolo Ativo) ---
   const addMeal = () => {
-    setMeals([...meals, { title: "Nova Refeição", time: "08:00", items: [], observations: "" }]);
+    const n = [...protocols];
+    n[activeProtocolIndex].meals.push({ title: "Nova Refeição", time: "08:00", items: [], observations: "" });
+    setProtocols(n);
   };
 
   const addItemToMeal = (mealIndex: number, food: any) => {
-    const newMeals = [...meals];
+    const n = [...protocols];
     const newItem = {
          amount: food.base_unit === 'un' ? "3" : "100", 
          unit: food.base_unit || "g",
@@ -95,18 +152,18 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
 
     if (manualSubIndex) {
        const { mIdx, iIdx } = manualSubIndex;
-       newMeals[mIdx].items[iIdx].substitutes.push(newItem);
+       n[activeProtocolIndex].meals[mIdx].items[iIdx].substitutes.push(newItem);
        setManualSubIndex(null);
     } else {
-       newMeals[mealIndex].items.push(newItem);
+       n[activeProtocolIndex].meals[mealIndex].items.push(newItem);
        setActiveMealIndex(null);
     }
-    setMeals(newMeals);
+    setProtocols(n);
     setSearchTerm('');
   };
 
   const calculateSubs = async (mealIndex: number, itemIndex: number) => {
-    const item = meals[mealIndex].items[itemIndex];
+    const item = protocols[activeProtocolIndex].meals[mealIndex].items[itemIndex];
     let apiAmount = parseFloat(item.amount);
     if (unitConversions[item.unit]) {
         apiAmount = apiAmount * unitConversions[item.unit];
@@ -122,25 +179,30 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
   };
 
   const approveSub = (mealIndex: number, itemIndex: number, sub: any) => {
-    const newMeals = [...meals];
-    const exists = newMeals[mealIndex].items[itemIndex].substitutes.find((s: any) => s.name === sub.name);
+    const n = [...protocols];
+    const exists = n[activeProtocolIndex].meals[mealIndex].items[itemIndex].substitutes.find((s: any) => s.name === sub.name);
     if (!exists) {
-      newMeals[mealIndex].items[itemIndex].substitutes.push(sub);
-      setMeals(newMeals);
+      n[activeProtocolIndex].meals[mealIndex].items[itemIndex].substitutes.push(sub);
+      setProtocols(n);
     }
     const key = `${mealIndex}-${itemIndex}`;
     setSuggestions(prev => ({ ...prev, [key]: prev[key].filter((s: any) => s.name !== sub.name) }));
   };
 
   const saveDiet = async () => {
-    const dietToSave = meals.map(meal => ({
-      ...meal,
-      items: meal.items.map((item: any) => ({
-        ...item,
-        name: `${item.amount}${item.unit} ${item.name}`,
-        substitutes: item.substitutes 
+    // Formata o array mestre de protocolos para salvar
+    const dietToSave = protocols.map(p => ({
+      ...p,
+      meals: p.meals.map((meal: any) => ({
+        ...meal,
+        items: meal.items.map((item: any) => ({
+          ...item,
+          name: `${item.amount}${item.unit} ${item.name}`,
+          substitutes: item.substitutes 
+        }))
       }))
     }));
+
     await fetch('/api/diet/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -154,151 +216,201 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 font-sans pb-32 text-black">
-      <header className="max-w-3xl mx-auto mb-10 flex justify-between items-center">
+      <header className="max-w-3xl mx-auto mb-8 flex justify-between items-center">
         <button onClick={() => router.back()} className="p-3 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md transition-all"><ArrowLeft size={20} /></button>
-        <h1 className="text-2xl font-black uppercase italic tracking-tighter text-slate-800">Editor <span className="text-blue-600">MASTER V5</span></h1>
+        <h1 className="text-2xl font-black uppercase italic tracking-tighter text-slate-800">Editor <span className="text-blue-600">MASTER V6</span></h1>
         <div className="w-10" />
       </header>
 
-      <main className="max-w-3xl mx-auto space-y-8">
-        {meals.map((meal, mIdx) => (
-          <div key={mIdx} className="bg-white rounded-[30px] border border-slate-200 p-8 shadow-xl shadow-slate-200/50 relative group/card transition-all hover:shadow-2xl hover:shadow-blue-900/5">
-            <button onClick={() => setMeals(meals.filter((_, i) => i !== mIdx))} className="absolute top-6 right-6 text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
-
-            {/* HEADER MODERNO: HORA E TÍTULO */}
-            <div className="flex items-center gap-4 mb-6">
-               <div className="relative group">
-                 <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                   <Clock size={16} className="text-blue-600" />
-                 </div>
-                 <select 
-                   className="pl-10 pr-8 py-3 bg-blue-50/50 rounded-2xl font-black text-sm text-blue-900 appearance-none outline-none focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
-                   value={meal.time}
-                   onChange={(e) => { const n = [...meals]; n[mIdx].time = e.target.value; setMeals(n); }}
-                 >
-                   {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
-                 </select>
-                 <ChevronDown size={14} className="absolute right-3 top-4 text-blue-400 pointer-events-none" />
-               </div>
-               
-               <div className="flex-1 relative">
-                 <input 
-                   list={`titles-${mIdx}`} 
-                   className="w-full text-xl font-black uppercase italic text-slate-800 outline-none bg-transparent placeholder-slate-300 border-b-2 border-transparent focus:border-blue-500 transition-all pb-1"
-                   value={meal.title}
-                   placeholder="NOME DA REFEIÇÃO"
-                   onChange={(e) => { const n = [...meals]; n[mIdx].title = e.target.value; setMeals(n); }}
-                 />
-                 <datalist id={`titles-${mIdx}`}>
-                    {mealTitles.map(t => <option key={t} value={t} />)}
-                 </datalist>
-               </div>
-            </div>
-
-            {/* OBSERVAÇÕES ELEGANTES */}
-            <div className="mb-8">
-               <div className="relative">
-                  <FileText size={16} className="absolute top-3 left-3 text-yellow-500" />
-                  <textarea 
-                    placeholder="Adicionar observações ou modo de preparo..."
-                    className="w-full pl-10 pr-4 py-3 bg-yellow-50/30 rounded-2xl text-sm font-medium text-slate-600 outline-none resize-none focus:bg-yellow-50 focus:ring-2 focus:ring-yellow-500/20 transition-all min-h-[50px]"
-                    rows={meal.observations ? 2 : 1}
-                    value={meal.observations}
-                    onChange={(e) => { const n = [...meals]; n[mIdx].observations = e.target.value; setMeals(n); }}
-                  />
-               </div>
-            </div>
-
-            <div className="space-y-4">
-              {meal.items.map((item: any, iIdx: number) => {
-                const suggestionKey = `${mIdx}-${iIdx}`;
-                const itemSuggestions = suggestions[suggestionKey] || [];
-
-                return (
-                  <div key={iIdx} className="p-1 rounded-3xl transition-all hover:bg-slate-50/50">
-                    <div className="flex items-center gap-4 bg-white border border-slate-100 p-4 rounded-2xl shadow-sm relative group/item">
-                      
-                      {/* INPUT DE QUANTIDADE E UNIDADE (COMBO VISUAL) */}
-                      <div className="flex items-center bg-slate-100 rounded-xl px-2 py-1 h-12">
-                        <input 
-                          className="w-12 bg-transparent text-center font-black text-lg text-slate-800 outline-none" 
-                          value={item.amount} 
-                          onChange={(e) => { const n = [...meals]; n[mIdx].items[iIdx].amount = e.target.value; setMeals(n); }} 
-                        />
-                        <div className="h-6 w-[1px] bg-slate-300 mx-1"></div>
-                        <select 
-                           className="bg-transparent text-[10px] font-black uppercase text-slate-500 outline-none appearance-none cursor-pointer w-14 text-center"
-                           value={item.unit}
-                           onChange={(e) => { const n = [...meals]; n[mIdx].items[iIdx].unit = e.target.value; setMeals(n); }}
-                        >
-                           <option value="g">G</option>
-                           <option value="ml">ML</option>
-                           <option value="un">UN</option>
-                           <option value="fatia">FATIA</option>
-                           <option value="colher">COLHER</option>
-                           <option value="scoop">SCOOP</option>
-                           <option value="xicara">XÍC</option>
-                        </select>
-                      </div>
-                      
-                      <span className="flex-1 font-bold text-sm text-slate-700 uppercase tracking-wide">{item.name}</span>
-                      
-                      {/* BOTÕES DE AÇÃO FLUTUANTES NO HOVER */}
-                      <div className="flex gap-2 opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100 transition-opacity">
-                        <button onClick={() => calculateSubs(mIdx, iIdx)} className="p-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all active:scale-95"><Calculator size={18} /></button>
-                        <button onClick={() => { const n = [...meals]; n[mIdx].items.splice(iIdx, 1); setMeals(n); }} className="p-2.5 bg-white border border-slate-200 text-slate-400 rounded-xl hover:text-red-500 hover:border-red-200 transition-all"><Trash2 size={18} /></button>
-                      </div>
-                    </div>
-
-                    {/* SUGESTÕES (AZUL) */}
-                    {itemSuggestions.length > 0 && (
-                      <div className="mt-3 ml-4 p-4 bg-blue-50/50 rounded-2xl border border-blue-100 animate-in slide-in-from-top-2">
-                        <p className="text-[10px] font-black uppercase text-blue-400 mb-3 tracking-wider">Sugestões de troca:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {itemSuggestions.map((sub: any, sIdx: number) => (
-                            <button key={sIdx} onClick={() => approveSub(mIdx, iIdx, sub)} className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl shadow-sm border border-blue-100 hover:border-blue-500 hover:text-blue-600 transition-all group/sub">
-                              <Plus size={14} className="text-blue-300 group-hover/sub:text-blue-600" /> 
-                              <span className="text-[10px] font-bold uppercase text-slate-600 group-hover/sub:text-blue-900">{sub.amount}{sub.unit} {sub.name}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* SUBSTITUTOS APROVADOS (VERDE) */}
-                    {item.substitutes?.length > 0 && (
-                      <div className="mt-3 ml-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {item.substitutes.map((sub: any, sIdx: number) => (
-                          <div key={sIdx} className="flex items-center gap-3 bg-green-50/50 border border-green-100 p-2 pl-3 rounded-xl group/active">
-                            <div className="flex items-center gap-1">
-                               <input className="w-8 bg-transparent font-black text-xs text-green-700 text-center outline-none border-b border-green-200 focus:border-green-500" value={sub.amount} onChange={(e) => { const n = [...meals]; n[mIdx].items[iIdx].substitutes[sIdx].amount = e.target.value; setMeals(n); }} />
-                               <span className="text-[9px] font-black uppercase text-green-400">{sub.unit}</span>
-                            </div>
-                            <span className="text-[10px] font-bold uppercase text-green-800 flex-1 truncate">{sub.name}</span>
-                            <button onClick={() => { const n = [...meals]; n[mIdx].items[iIdx].substitutes.splice(sIdx, 1); setMeals(n); }} className="p-1.5 text-green-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover/active:opacity-100"><X size={14} /></button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <button onClick={() => { setManualSubIndex({ mIdx, iIdx }); setActiveMealIndex(mIdx); }} className="w-full text-center mt-2 text-[10px] font-bold text-slate-300 uppercase hover:text-blue-500 transition-colors py-1">+ Adicionar Substituto Manual</button>
-                  </div>
-                );
-              })}
-              
-              {activeMealIndex === mIdx ? null : (
-                 <button onClick={() => setActiveMealIndex(mIdx)} className="w-full py-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 font-bold uppercase text-xs hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50/30 transition-all flex items-center justify-center gap-2 group/add">
-                    <div className="p-1 bg-slate-200 rounded-full text-white group-hover/add:bg-blue-500 transition-colors"><Plus size={14} /></div>
-                    Adicionar Alimento
-                 </button>
-              )}
-            </div>
-          </div>
-        ))}
+      <main className="max-w-3xl mx-auto space-y-6">
         
-        <button onClick={addMeal} className="w-full py-8 bg-white border border-slate-200 rounded-[30px] shadow-sm text-slate-400 font-black uppercase tracking-widest hover:shadow-lg hover:border-blue-200 hover:text-blue-600 transition-all flex items-center justify-center gap-3">
-            <Plus size={24} /> Nova Refeição
-        </button>
+        {/* --- ABAS DE PROTOCOLOS --- */}
+        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+            {protocols.map((p, idx) => (
+               <button 
+                  key={p.id} 
+                  onClick={() => setActiveProtocolIndex(idx)}
+                  className={`px-6 py-3 rounded-2xl font-black uppercase text-xs whitespace-nowrap transition-all ${activeProtocolIndex === idx ? 'bg-slate-900 text-white shadow-xl' : 'bg-white text-slate-400 border border-slate-200 hover:border-slate-400'}`}
+               >
+                  {p.name}
+               </button>
+            ))}
+            <button onClick={addProtocol} className="px-5 py-3 bg-blue-50 text-blue-600 border border-blue-200 rounded-2xl font-black uppercase text-xs whitespace-nowrap hover:bg-blue-600 hover:text-white transition-all flex items-center gap-2">
+               <Plus size={14}/> Add Ciclo
+            </button>
+        </div>
+
+        {/* --- CONFIGURAÇÃO DO PROTOCOLO ATIVO --- */}
+        <div className="bg-white p-6 sm:p-8 rounded-[30px] border border-slate-200 shadow-sm relative animate-in fade-in slide-in-from-bottom-2">
+            <div className="flex justify-between items-start mb-6">
+                <input 
+                   className="text-2xl font-black uppercase italic text-slate-800 outline-none bg-transparent border-b-2 border-transparent focus:border-blue-500 w-full transition-colors pb-1"
+                   value={protocols[activeProtocolIndex].name}
+                   onChange={(e) => { const n = [...protocols]; n[activeProtocolIndex].name = e.target.value; setProtocols(n); }}
+                   placeholder="NOME DO PROTOCOLO (Ex: Dia de Treino)"
+                />
+                {protocols.length > 1 && (
+                   <button onClick={() => { const n = [...protocols]; n.splice(activeProtocolIndex, 1); setProtocols(n); setActiveProtocolIndex(0); }} className="p-2 text-slate-300 hover:text-red-500 ml-4 transition-colors"><Trash2 size={20}/></button>
+                )}
+            </div>
+            
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Dias da Semana Ativos:</p>
+            <div className="flex gap-2 flex-wrap">
+                {weekDays.map(day => {
+                   const isActive = protocols[activeProtocolIndex].activeDays.includes(day.idx);
+                   return (
+                      <button 
+                         key={day.idx} 
+                         onClick={() => toggleDay(day.idx)}
+                         className={`w-12 h-12 rounded-2xl font-black text-xs transition-all flex items-center justify-center ${isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 scale-105' : 'bg-slate-50 text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                      >
+                         {day.label}
+                      </button>
+                   );
+                })}
+            </div>
+        </div>
+
+        {/* --- REFEIÇÕES DO PROTOCOLO ATIVO --- */}
+        <div className="space-y-8 mt-8">
+            {protocols[activeProtocolIndex].meals.map((meal: any, mIdx: number) => (
+              <div key={mIdx} className="bg-white rounded-[30px] border border-slate-200 p-8 shadow-xl shadow-slate-200/50 relative group/card transition-all hover:shadow-2xl hover:shadow-blue-900/5">
+                <button onClick={() => { const n = [...protocols]; n[activeProtocolIndex].meals.splice(mIdx, 1); setProtocols(n); }} className="absolute top-6 right-6 text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
+
+                {/* HEADER MODERNO: HORA E TÍTULO */}
+                <div className="flex items-center gap-4 mb-6">
+                   <div className="relative group">
+                     <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                       <Clock size={16} className="text-blue-600" />
+                     </div>
+                     <select 
+                       className="pl-10 pr-8 py-3 bg-blue-50/50 rounded-2xl font-black text-sm text-blue-900 appearance-none outline-none focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
+                       value={meal.time}
+                       onChange={(e) => { const n = [...protocols]; n[activeProtocolIndex].meals[mIdx].time = e.target.value; setProtocols(n); }}
+                     >
+                       {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                     </select>
+                     <ChevronDown size={14} className="absolute right-3 top-4 text-blue-400 pointer-events-none" />
+                   </div>
+                   
+                   <div className="flex-1 relative">
+                     <input 
+                       list={`titles-${mIdx}`} 
+                       className="w-full text-xl font-black uppercase italic text-slate-800 outline-none bg-transparent placeholder-slate-300 border-b-2 border-transparent focus:border-blue-500 transition-all pb-1"
+                       value={meal.title}
+                       placeholder="NOME DA REFEIÇÃO"
+                       onChange={(e) => { const n = [...protocols]; n[activeProtocolIndex].meals[mIdx].title = e.target.value; setProtocols(n); }}
+                     />
+                     <datalist id={`titles-${mIdx}`}>
+                        {mealTitles.map(t => <option key={t} value={t} />)}
+                     </datalist>
+                   </div>
+                </div>
+
+                {/* OBSERVAÇÕES ELEGANTES */}
+                <div className="mb-8">
+                   <div className="relative">
+                      <FileText size={16} className="absolute top-3 left-3 text-yellow-500" />
+                      <textarea 
+                        placeholder="Adicionar observações ou modo de preparo..."
+                        className="w-full pl-10 pr-4 py-3 bg-yellow-50/30 rounded-2xl text-sm font-medium text-slate-600 outline-none resize-none focus:bg-yellow-50 focus:ring-2 focus:ring-yellow-500/20 transition-all min-h-[50px]"
+                        rows={meal.observations ? 2 : 1}
+                        value={meal.observations}
+                        onChange={(e) => { const n = [...protocols]; n[activeProtocolIndex].meals[mIdx].observations = e.target.value; setProtocols(n); }}
+                      />
+                   </div>
+                </div>
+
+                <div className="space-y-4">
+                  {meal.items.map((item: any, iIdx: number) => {
+                    const suggestionKey = `${mIdx}-${iIdx}`;
+                    const itemSuggestions = suggestions[suggestionKey] || [];
+
+                    return (
+                      <div key={iIdx} className="p-1 rounded-3xl transition-all hover:bg-slate-50/50">
+                        <div className="flex items-center gap-4 bg-white border border-slate-100 p-4 rounded-2xl shadow-sm relative group/item">
+                          
+                          {/* INPUT DE QUANTIDADE E UNIDADE */}
+                          <div className="flex items-center bg-slate-100 rounded-xl px-2 py-1 h-12">
+                            <input 
+                              className="w-12 bg-transparent text-center font-black text-lg text-slate-800 outline-none" 
+                              value={item.amount} 
+                              onChange={(e) => { const n = [...protocols]; n[activeProtocolIndex].meals[mIdx].items[iIdx].amount = e.target.value; setProtocols(n); }} 
+                            />
+                            <div className="h-6 w-[1px] bg-slate-300 mx-1"></div>
+                            <select 
+                               className="bg-transparent text-[10px] font-black uppercase text-slate-500 outline-none appearance-none cursor-pointer w-14 text-center"
+                               value={item.unit}
+                               onChange={(e) => { const n = [...protocols]; n[activeProtocolIndex].meals[mIdx].items[iIdx].unit = e.target.value; setProtocols(n); }}
+                            >
+                               <option value="g">G</option>
+                               <option value="ml">ML</option>
+                               <option value="un">UN</option>
+                               <option value="fatia">FATIA</option>
+                               <option value="colher">COLHER</option>
+                               <option value="scoop">SCOOP</option>
+                               <option value="xicara">XÍC</option>
+                            </select>
+                          </div>
+                          
+                          <span className="flex-1 font-bold text-sm text-slate-700 uppercase tracking-wide">{item.name}</span>
+                          
+                          <div className="flex gap-2 opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100 transition-opacity">
+                            <button onClick={() => calculateSubs(mIdx, iIdx)} className="p-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all active:scale-95"><Calculator size={18} /></button>
+                            <button onClick={() => { const n = [...protocols]; n[activeProtocolIndex].meals[mIdx].items.splice(iIdx, 1); setProtocols(n); }} className="p-2.5 bg-white border border-slate-200 text-slate-400 rounded-xl hover:text-red-500 hover:border-red-200 transition-all"><Trash2 size={18} /></button>
+                          </div>
+                        </div>
+
+                        {/* SUGESTÕES (AZUL) */}
+                        {itemSuggestions.length > 0 && (
+                          <div className="mt-3 ml-4 p-4 bg-blue-50/50 rounded-2xl border border-blue-100 animate-in slide-in-from-top-2">
+                            <p className="text-[10px] font-black uppercase text-blue-400 mb-3 tracking-wider">Sugestões de troca:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {itemSuggestions.map((sub: any, sIdx: number) => (
+                                <button key={sIdx} onClick={() => approveSub(mIdx, iIdx, sub)} className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl shadow-sm border border-blue-100 hover:border-blue-500 hover:text-blue-600 transition-all group/sub">
+                                  <Plus size={14} className="text-blue-300 group-hover/sub:text-blue-600" /> 
+                                  <span className="text-[10px] font-bold uppercase text-slate-600 group-hover/sub:text-blue-900">{sub.amount}{sub.unit} {sub.name}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* SUBSTITUTOS APROVADOS (VERDE) */}
+                        {item.substitutes?.length > 0 && (
+                          <div className="mt-3 ml-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {item.substitutes.map((sub: any, sIdx: number) => (
+                              <div key={sIdx} className="flex items-center gap-3 bg-green-50/50 border border-green-100 p-2 pl-3 rounded-xl group/active">
+                                <div className="flex items-center gap-1">
+                                   <input className="w-8 bg-transparent font-black text-xs text-green-700 text-center outline-none border-b border-green-200 focus:border-green-500" value={sub.amount} onChange={(e) => { const n = [...protocols]; n[activeProtocolIndex].meals[mIdx].items[iIdx].substitutes[sIdx].amount = e.target.value; setProtocols(n); }} />
+                                   <span className="text-[9px] font-black uppercase text-green-400">{sub.unit}</span>
+                                </div>
+                                <span className="text-[10px] font-bold uppercase text-green-800 flex-1 truncate">{sub.name}</span>
+                                <button onClick={() => { const n = [...protocols]; n[activeProtocolIndex].meals[mIdx].items[iIdx].substitutes.splice(sIdx, 1); setProtocols(n); }} className="p-1.5 text-green-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover/active:opacity-100"><X size={14} /></button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <button onClick={() => { setManualSubIndex({ mIdx, iIdx }); setActiveMealIndex(mIdx); }} className="w-full text-center mt-2 text-[10px] font-bold text-slate-300 uppercase hover:text-blue-500 transition-colors py-1">+ Adicionar Substituto Manual</button>
+                      </div>
+                    );
+                  })}
+                  
+                  {activeMealIndex === mIdx ? null : (
+                     <button onClick={() => setActiveMealIndex(mIdx)} className="w-full py-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 font-bold uppercase text-xs hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50/30 transition-all flex items-center justify-center gap-2 group/add">
+                        <div className="p-1 bg-slate-200 rounded-full text-white group-hover/add:bg-blue-500 transition-colors"><Plus size={14} /></div>
+                        Adicionar Alimento
+                     </button>
+                  )}
+                </div>
+              </div>
+            ))}
+            
+            <button onClick={addMeal} className="w-full py-8 bg-white border border-slate-200 rounded-[30px] shadow-sm text-slate-400 font-black uppercase tracking-widest hover:shadow-lg hover:border-blue-200 hover:text-blue-600 transition-all flex items-center justify-center gap-3">
+                <Plus size={24} /> Nova Refeição
+            </button>
+        </div>
       </main>
 
       {/* MODAL DE BUSCA MANTIDO E OTIMIZADO VISUALMENTE */}

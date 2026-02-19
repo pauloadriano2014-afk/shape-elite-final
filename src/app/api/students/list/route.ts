@@ -3,9 +3,16 @@ import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    // AQUI ESTÁ O FILTRO MÁGICO: WHERE role = 'student'
     const students = await sql`
-      SELECT * FROM public.profiles 
+      SELECT 
+        id, 
+        full_name, 
+        goal, 
+        weight, 
+        height,
+        "photoUrl" as "photoUrl",
+        "photoPosition" as "photoPosition"
+      FROM public.profiles 
       WHERE role = 'student'
       ORDER BY full_name ASC
     `;
