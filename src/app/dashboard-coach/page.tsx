@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Users, Plus, ChevronRight, Target, Search } from 'lucide-react';
+import { Users, Plus, ChevronRight, Target, Search, Edit2, LogOut } from 'lucide-react';
 
 export default function DashboardCoachPage() {
   const router = useRouter();
@@ -27,14 +27,20 @@ export default function DashboardCoachPage() {
     loadStudents();
   }, []);
 
+  const handleLogout = () => {
+    // Limpa a sessão e manda de volta para o login
+    localStorage.removeItem('shape_user');
+    router.push('/login');
+  };
+
   const filteredStudents = students.filter(s => 
     s.full_name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   if (loading) return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-      <div className="text-center font-black animate-pulse uppercase tracking-widest text-black">
-        Carregando Time...
+      <div className="text-center font-black animate-pulse uppercase tracking-widest text-black italic">
+        Sincronizando Time...
       </div>
     </div>
   );
@@ -50,13 +56,25 @@ export default function DashboardCoachPage() {
             Gestão de Atletas de Elite
           </p>
         </div>
-        {/* BOTÃO CONECTADO À PÁGINA DE CADASTRO */}
-        <button 
-          onClick={() => router.push('/dashboard-coach/novo-aluno')}
-          className="bg-black text-white p-4 rounded-2xl shadow-xl hover:bg-blue-600 transition-all active:scale-90"
-        >
-          <Plus size={28} />
-        </button>
+        
+        <div className="flex gap-3">
+          {/* BOTÃO DE LOGOUT ADICIONADO */}
+          <button 
+            onClick={handleLogout}
+            className="bg-white text-red-500 border-2 border-red-100 p-4 rounded-2xl shadow-sm hover:bg-red-50 transition-all active:scale-90"
+            title="Sair do Sistema"
+          >
+            <LogOut size={28} />
+          </button>
+
+          <button 
+            onClick={() => router.push('/dashboard-coach/novo-aluno')}
+            className="bg-black text-white p-4 rounded-2xl shadow-xl hover:bg-blue-600 transition-all active:scale-90"
+            title="Cadastrar Novo Aluno"
+          >
+            <Plus size={28} />
+          </button>
+        </div>
       </header>
 
       <main className="max-w-4xl mx-auto space-y-6">
@@ -72,29 +90,43 @@ export default function DashboardCoachPage() {
           />
         </div>
 
-        {/* LISTA DE ALUNOS */}
+        {/* LISTA DE ALUNOS COM EDIÇÃO RÁPIDA */}
         <div className="grid gap-4">
           {filteredStudents.map((student) => (
             <div 
               key={student.id}
-              onClick={() => router.push(`/dashboard-coach/aluno/${student.id}/dieta-atual`)}
-              className="bg-white p-6 rounded-[35px] border-2 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] flex justify-between items-center cursor-pointer hover:translate-x-2 transition-all group active:scale-[0.98]"
+              className="bg-white p-6 rounded-[35px] border-2 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] flex justify-between items-center group active:scale-[0.99] transition-all"
             >
-              <div className="flex items-center gap-5">
+              <div 
+                onClick={() => router.push(`/dashboard-coach/aluno/${student.id}/dieta-atual`)}
+                className="flex items-center gap-5 cursor-pointer flex-1"
+              >
                 <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center border-2 border-black group-hover:bg-blue-600 group-hover:text-white transition-colors">
                   <Users size={24} />
                 </div>
                 <div>
                   <h3 className="font-black uppercase italic text-lg leading-none">{student.full_name}</h3>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Target size={12} className="text-blue-600" />
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
-                      {student.goal}
+                  <div className="flex items-center gap-3 mt-1">
+                    <div className="flex items-center gap-1">
+                      <Target size={12} className="text-blue-600" />
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
+                        {student.goal}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-black text-blue-600 uppercase italic">
+                      {student.weight ? `${student.weight}kg` : '-- kg'}
                     </span>
                   </div>
                 </div>
               </div>
-              <ChevronRight size={24} className="text-slate-300 group-hover:text-black transition-colors" />
+
+              {/* BOTÃO DE EDIÇÃO INTEGRADO */}
+              <button 
+                onClick={() => router.push(`/dashboard-coach/aluno/${student.id}`)}
+                className="bg-slate-50 p-4 rounded-2xl border-2 border-black hover:bg-black hover:text-white transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ml-4"
+              >
+                <Edit2 size={20} />
+              </button>
             </div>
           ))}
 

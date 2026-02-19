@@ -3,17 +3,16 @@ import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    // Busca todos os perfis que possuem a role 'aluno'
+    // AQUI ESTÁ O FILTRO MÁGICO: WHERE role = 'student'
     const students = await sql`
-      SELECT id, full_name, email, goal, created_at 
-      FROM public.profiles 
-      WHERE role = 'aluno' 
+      SELECT * FROM public.profiles 
+      WHERE role = 'student'
       ORDER BY full_name ASC
     `;
 
     return NextResponse.json(students);
-  } catch (error: any) {
-    console.error("ERRO AO LISTAR ALUNOS:", error);
-    return NextResponse.json({ error: "Erro ao buscar alunos" }, { status: 500 });
+  } catch (error) {
+    console.error("Erro ao listar alunos:", error);
+    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }
