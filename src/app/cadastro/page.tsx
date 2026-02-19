@@ -38,7 +38,7 @@ export default function CadastroPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 flex items-center justify-center font-sans">
+    <div className="min-h-[100dvh] overscroll-none bg-slate-50 p-6 flex items-center justify-center font-sans">
       <div className="max-w-md w-full">
         <header className="text-center mb-10">
           <h1 className="text-4xl font-black italic tracking-tighter text-slate-900">

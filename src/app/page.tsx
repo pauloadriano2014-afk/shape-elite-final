@@ -70,6 +70,18 @@ export default function Home() {
       { idx: 6, label: 'Sáb' }
   ];
 
+  // --- TRAVA DE SCROLL GLOBAL PARA TODOS OS MODAIS DA PÁGINA ---
+  useEffect(() => {
+    if (isModalOpen || isShoppingListOpen || isAiModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isModalOpen, isShoppingListOpen, isAiModalOpen]);
+
   // --- CARREGAMENTO INICIAL DE DADOS ---
   useEffect(() => {
     const storedUser = localStorage.getItem('shape_user');
@@ -292,7 +304,7 @@ export default function Home() {
   // --- TELA DE CARREGAMENTO ---
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center gap-4">
+      <div className="min-h-[100dvh] bg-slate-900 flex flex-col items-center justify-center gap-4">
         <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
         <p className="font-black text-white text-xl tracking-[0.3em] uppercase italic animate-pulse">Shape Natural</p>
       </div>
@@ -474,7 +486,8 @@ export default function Home() {
                             {i + 1}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <span className="block text-sm sm:text-base font-black uppercase italic text-slate-800 leading-tight truncate group-hover/item:text-blue-700 transition-colors">
+                            {/* Fonte ajustada e line-clamp-2 para evitar quebras abruptas */}
+                            <span className="block text-xs sm:text-sm font-black uppercase italic text-slate-800 leading-snug line-clamp-2 whitespace-normal group-hover/item:text-blue-700 transition-colors">
                               {item.name}
                             </span>
                             {item.amount && (
@@ -645,12 +658,12 @@ export default function Home() {
         </div>
       )}
 
-      {/* --- MODAL DE SUBSTITUIÇÃO --- */}
+      {/* --- MODAL DE SUBSTITUIÇÃO (RESPONSIVO E PROTEGIDO CONTRA VAZAMENTO) --- */}
       {isModalOpen && selectedItem && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-6">
           <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md" onClick={() => setIsModalOpen(false)} />
           
-          <div className="bg-white w-full max-w-lg rounded-t-[40px] sm:rounded-[50px] overflow-hidden relative z-10 animate-in slide-in-from-bottom duration-500 shadow-2xl pb-[env(safe-area-inset-bottom,0px)] max-h-[90dvh] flex flex-col">
+          <div className="bg-white w-full max-w-lg rounded-t-[40px] sm:rounded-[50px] overflow-hidden relative z-10 animate-in slide-in-from-bottom duration-500 shadow-2xl pb-[env(safe-area-inset-bottom,0px)] max-h-[85dvh] flex flex-col">
             <div className="bg-blue-600 p-6 sm:p-8 pt-[max(env(safe-area-inset-top,1.5rem),1.5rem)] text-white relative shrink-0">
                <button 
                  onClick={() => setIsModalOpen(false)} 
@@ -659,7 +672,7 @@ export default function Home() {
                  <X size={20} />
                </button>
                <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] sm:tracking-[0.3em] opacity-80 mb-2 sm:mb-3 block">Opções Inteligentes:</span>
-               <h3 className="text-2xl sm:text-3xl font-black uppercase italic leading-none tracking-tight pr-12">{selectedItem.name}</h3>
+               <h3 className="text-2xl sm:text-3xl font-black uppercase italic leading-none tracking-tight pr-12 line-clamp-2">{selectedItem.name}</h3>
             </div>
 
             <div className="p-5 sm:p-8 bg-white flex-1 overflow-hidden flex flex-col">
@@ -671,7 +684,7 @@ export default function Home() {
                         <span className="text-base sm:text-lg font-black leading-none">{sub.amount}</span>
                         <span className="text-[8px] sm:text-[9px] font-black uppercase mt-1">{sub.unit}</span>
                       </div>
-                      <span className="font-black uppercase italic text-slate-700 text-xs sm:text-sm group-hover:text-blue-900 transition-colors line-clamp-2">
+                      <span className="font-black uppercase italic text-slate-700 text-xs sm:text-sm group-hover:text-blue-900 transition-colors line-clamp-2 whitespace-normal">
                         {sub.name}
                       </span>
                     </div>
