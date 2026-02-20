@@ -10,7 +10,6 @@ export default function NutriChat({ studentName, protocols }: { studentName: str
   const [messages, setMessages] = useState<{role: 'user' | 'assistant', content: string}[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // --- MENSAGEM INICIAL DE SAUDAÇÃO ---
   useEffect(() => {
     if (studentName && messages.length === 0) {
       setMessages([
@@ -19,14 +18,12 @@ export default function NutriChat({ studentName, protocols }: { studentName: str
     }
   }, [studentName]);
 
-  // --- ROLAGEM AUTOMÁTICA PARA A ÚLTIMA MENSAGEM ---
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, isOpen, loading]);
 
-  // --- TRAVA DE SCROLL NO FUNDO QUANDO O CHAT ABRE ---
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -62,36 +59,32 @@ export default function NutriChat({ studentName, protocols }: { studentName: str
 
   return (
     <>
-      {/* --- BOTÃO FLUTUANTE (PROTEGIDO DA ÁREA INFERIOR DO CELULAR) --- */}
       {!isOpen && (
         <button 
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-[calc(env(safe-area-inset-bottom,24px)+24px)] right-4 sm:right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-[0_10px_25px_rgba(37,99,235,0.5)] flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-[90] border-4 border-white"
+          className="fixed bottom-[calc(env(safe-area-inset-bottom,70px)+70px)] right-4 sm:right-6 w-14 h-14 bg-green-600 text-white rounded-full shadow-[0_10px_25px_rgba(22,163,74,0.4)] flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-[90] border-4 border-white"
         >
           <MessageCircle size={26} />
         </button>
       )}
 
-      {/* --- JANELA DO CHAT (RESPONSIVA CELULAR / DESKTOP) --- */}
       {isOpen && (
         <div className="fixed inset-0 z-[120] flex sm:items-end justify-center sm:justify-end sm:p-6 overscroll-none">
-          
-          {/* Fundo escuro (só aparece no desktop) */}
           <div className="absolute inset-0 bg-slate-900/60 sm:hidden backdrop-blur-sm" onClick={() => setIsOpen(false)} />
           
-          <div className="bg-white w-full h-[100dvh] sm:h-[600px] sm:w-[400px] flex flex-col relative z-10 sm:rounded-[40px] shadow-2xl overflow-hidden animate-in slide-in-from-bottom sm:slide-in-from-bottom-10 duration-300 border border-slate-200/50 pb-[env(safe-area-inset-bottom,0px)]">
+          <div className="bg-white w-full h-[100dvh] sm:h-[600px] sm:w-[400px] flex flex-col relative z-10 sm:rounded-[40px] shadow-2xl overflow-hidden animate-in slide-in-from-bottom sm:slide-in-from-bottom-10 duration-300 border border-slate-100 pb-[env(safe-area-inset-bottom,0px)]">
             
-            {/* Header do Chat (Protegido do Notch) */}
-            <div className="bg-slate-900 p-5 sm:p-6 pt-[max(env(safe-area-inset-top,1.5rem),1.5rem)] text-white flex justify-between items-center shrink-0 border-b-4 border-blue-600 relative">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600 rounded-full blur-[60px] opacity-20 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+            {/* Header Elite */}
+            <div className="bg-slate-900 p-5 sm:p-6 pt-[max(env(safe-area-inset-top,1.5rem),1.5rem)] text-white flex justify-between items-center shrink-0 border-b-4 border-green-600 relative">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-green-600 rounded-full blur-[60px] opacity-20 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
               
               <div className="flex items-center gap-4 relative z-10">
-                <div className="w-12 h-12 bg-blue-600 rounded-[18px] flex items-center justify-center text-white shadow-lg shrink-0">
+                <div className="w-12 h-12 bg-white/10 border border-white/5 rounded-[18px] flex items-center justify-center text-green-400 shadow-lg shrink-0">
                   <Sparkles size={22} className="animate-pulse" />
                 </div>
                 <div>
                   <h3 className="font-black uppercase text-sm tracking-widest leading-none mb-1">Coach Virtual</h3>
-                  <span className="text-[9px] text-blue-400 font-bold uppercase tracking-[0.2em]">Shape Natural Elite</span>
+                  <span className="text-[9px] text-green-400 font-bold uppercase tracking-[0.2em]">Shape Natural Elite</span>
                 </div>
               </div>
               
@@ -103,40 +96,37 @@ export default function NutriChat({ studentName, protocols }: { studentName: str
               </button>
             </div>
 
-            {/* Área de Mensagens */}
             <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 bg-slate-50 custom-scrollbar">
               {messages.map((msg, i) => (
                 <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] p-4 sm:p-5 rounded-[25px] text-[13px] sm:text-sm font-semibold leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-br-sm' : 'bg-white text-slate-800 rounded-bl-sm border border-slate-200'}`}>
+                  <div className={`max-w-[85%] p-4 sm:p-5 rounded-[25px] text-[13px] sm:text-sm font-semibold leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-green-600 text-white rounded-br-sm' : 'bg-white text-slate-800 rounded-bl-sm border border-slate-200'}`}>
                     {msg.content}
                   </div>
                 </div>
               ))}
               {loading && (
-                <div className="flex justify-start italic text-[11px] font-bold uppercase text-slate-400 gap-2 items-center px-4 py-2 bg-slate-100 w-fit rounded-full animate-pulse">
-                  <Loader2 size={14} className="animate-spin text-blue-600" /> Analisando dieta...
+                <div className="flex justify-start italic text-[11px] font-bold uppercase text-slate-400 gap-2 items-center px-4 py-2 bg-slate-100 w-fit rounded-full animate-pulse border border-slate-200">
+                  <Loader2 size={14} className="animate-spin text-green-600" /> Analisando dieta...
                 </div>
               )}
             </div>
 
-            {/* Input de Mensagem (Protegido do Teclado) */}
             <div className="p-4 sm:p-5 bg-white border-t border-slate-100 flex gap-3 shrink-0">
               <input 
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
                 placeholder="Pergunte sobre sua dieta..."
-                className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-[20px] px-5 py-4 text-sm font-bold text-slate-800 focus:border-blue-500 focus:bg-white outline-none transition-all placeholder:text-slate-400"
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-[20px] px-5 py-4 text-sm font-bold text-slate-800 focus:border-green-500 focus:bg-white outline-none transition-all placeholder:text-slate-300"
               />
               <button 
                 onClick={sendMessage} 
                 disabled={!input.trim() || loading}
-                className="w-[56px] h-[56px] shrink-0 bg-slate-900 text-white rounded-[20px] flex items-center justify-center hover:bg-blue-600 transition-all shadow-xl active:scale-90 disabled:opacity-50 disabled:scale-100"
+                className="w-[56px] h-[56px] shrink-0 bg-slate-900 text-white rounded-[20px] flex items-center justify-center hover:bg-green-600 transition-all shadow-xl active:scale-90 disabled:opacity-50 disabled:scale-100"
               >
-                <Send size={22} className="ml-1" />
+                <Send size={22} className="ml-1 text-green-400" />
               </button>
             </div>
-
           </div>
         </div>
       )}

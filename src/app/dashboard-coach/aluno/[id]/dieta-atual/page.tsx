@@ -2,194 +2,199 @@
 
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Plus, Trash2, Save, Clock, Flame, RotateCcw } from 'lucide-react';
+import { ChevronLeft, Edit3, Clock, Utensils, AlertCircle, ArrowRightLeft, CheckCircle2 } from 'lucide-react';
 
-export default function DietaAtualPage({ params }: { params: Promise<{ id: string }> }) {
+export default function VisualizadorDietaPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { id } = use(params);
-  const [meals, setMeals] = useState<any[]>([]);
+  
+  const [protocols, setProtocols] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [hasChanges, setHasChanges] = useState(false);
+  const [activeProtocolIndex, setActiveProtocolIndex] = useState(0);
 
   useEffect(() => {
-    loadDiet();
+    async function fetchDiet() {
+      try {
+        const res = await fetch(`/api/diet/latest?studentId=${id}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            // Normaliza caso seja a versão antiga (apenas refeições) ou a nova (protocolos)
+            if (!data[0].meals) {
+              setProtocols([{ id: 'default', name: 'Protocolo Base', meals: data }]);
+            } else {
+              setProtocols(data);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao carregar dieta ativa", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchDiet();
   }, [id]);
 
-  async function loadDiet() {
-    try {
-      const res = await fetch(`/api/diet/latest?studentId=${id}`);
-      if (res.ok) {
-        const data = await res.json();
-        // Garante que os itens virem string para edição fácil
-        const formatted = (Array.isArray(data) ? data : []).map((m: any) => ({
-          ...m,
-          // Transforma array de itens em texto único separado por quebra de linha
-          itemsText: Array.isArray(m.items) ? m.items.join('\n') : m.items
-        }));
-        setMeals(formatted);
-      }
-    } catch (err) { console.error(err); } finally { setLoading(false); }
-  }
-
-  // --- FUNÇÕES DE EDIÇÃO MANUAL ---
-  
-  const updateMeal = (index: number, field: string, value: string) => {
-    const newMeals = [...meals];
-    newMeals[index][field] = value;
-    setMeals(newMeals);
-    setHasChanges(true);
-  };
-
-  const addMeal = () => {
-    setMeals([...meals, { 
-      time: "00:00", 
-      title: "Nova Refeição", 
-      calories: "0", 
-      itemsText: "Insira os alimentos aqui..." 
-    }]);
-    setHasChanges(true);
-  };
-
-  const removeMeal = (index: number) => {
-    if (confirm("Tem certeza que quer remover essa refeição?")) {
-      const newMeals = meals.filter((_, i) => i !== index);
-      setMeals(newMeals);
-      setHasChanges(true);
-    }
-  };
-
-  const handleSave = async () => {
-    try {
-      // Reconverte o texto em array de itens antes de salvar
-      const cleanMeals = meals.map(m => ({
-        time: m.time,
-        title: m.title,
-        calories: m.calories,
-        items: m.itemsText.split('\n').filter((i: string) => i.trim() !== '')
-      }));
-
-      const res = await fetch('/api/diet/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId: id, meals: cleanMeals })
-      });
-
-      if (res.ok) {
-        setHasChanges(false);
-        alert("✅ DIETA SALVA E ATUALIZADA PARA O ALUNO!");
-      } else {
-        alert("Erro ao salvar.");
-      }
-    } catch (err) { alert("Erro de conexão."); }
-  };
-
-  if (loading) return <div className="p-10 text-center font-black animate-pulse">CARREGANDO...</div>;
+  if (loading) return (
+    <div className="min-h-[100dvh] bg-slate-900 flex flex-col items-center justify-center relative overflow-hidden">
+      {/* Luz de fundo */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[20rem] h-[20rem] bg-green-600 rounded-full blur-[120px] opacity-20 pointer-events-none"></div>
+      
+      {/* Logo Pulsando */}
+      <div className="w-32 h-32 sm:w-40 sm:h-40 relative animate-[pulse_2s_ease-in-out_infinite] mb-6">
+        <img src="/logo.png" alt="Carregando..." className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(22,163,74,0.4)]" />
+      </div>
+      
+      <p className="font-black uppercase tracking-[0.4em] text-green-500 italic text-xs sm:text-sm relative z-10">Sincronizando Elite...</p>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 text-black font-sans pb-40">
-      <header className="mb-8 flex items-center justify-between sticky top-0 bg-slate-50 z-10 py-4">
-        <div className="flex items-center gap-4">
-          <button onClick={() => router.back()} className="bg-white p-2 rounded-full border-2 border-black shadow-sm">
-            <ChevronLeft size={20} />
+    <div className="min-h-[100dvh] bg-slate-50 p-4 sm:p-6 font-sans pb-[env(safe-area-inset-bottom,120px)] text-black">
+      
+      {/* HEADER DE LEITURA RÁPIDA */}
+      <header className="max-w-4xl mx-auto mb-6 sm:mb-8 flex items-center justify-between sticky top-0 bg-slate-50/90 backdrop-blur-md z-30 py-4 border-b border-slate-200">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <button onClick={() => router.push(`/dashboard-coach/aluno/${id}`)} className="p-3 bg-white border border-slate-200 rounded-[14px] sm:rounded-[20px] shadow-sm hover:border-green-400 hover:text-green-600 transition-all flex items-center gap-2">
+            <ChevronLeft size={20} /> <span className="hidden sm:inline text-[11px] font-black uppercase tracking-widest">Voltar ao Perfil</span>
           </button>
-          <h1 className="text-2xl font-black uppercase italic tracking-tighter text-blue-600 leading-none">
-            Editor <span className="text-black">Pro</span>
-          </h1>
-        </div>
-        
-        {hasChanges && (
-          <div className="bg-yellow-400 text-black px-4 py-1 rounded-full text-[10px] font-black uppercase animate-bounce">
-            Alterações pendentes
+          <div>
+            <h1 className="text-xl sm:text-2xl font-black uppercase italic tracking-tighter text-slate-800 leading-none">
+              Dieta <span className="text-green-600">Ativa</span>
+            </h1>
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Modo Leitura Rápida</p>
           </div>
-        )}
+        </div>
+
+        {/* BOTÃO DE EDIÇÃO DIRETA */}
+        <button 
+          onClick={() => router.push(`/dashboard-coach/aluno/${id}/editor-pro`)}
+          className="bg-slate-900 text-white px-4 sm:px-6 py-3 rounded-[16px] sm:rounded-[20px] text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] flex items-center gap-2 shadow-lg hover:bg-green-600 transition-all active:scale-95"
+        >
+          <Edit3 size={16} className="text-green-400" /> <span className="hidden sm:inline">Editar no Master</span>
+        </button>
       </header>
 
-      <main className="max-w-md mx-auto space-y-6">
-        {meals.map((meal, index) => (
-          <div key={index} className="bg-white p-4 rounded-[25px] border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] relative group">
-            
-            {/* Botão de Excluir (Só aparece quando passa o mouse ou foca) */}
-            <button 
-              onClick={() => removeMeal(index)}
-              className="absolute -top-3 -right-3 bg-red-500 text-white p-2 rounded-full shadow-md opacity-100 hover:scale-110 transition-all z-10"
-              title="Excluir Refeição"
-            >
-              <Trash2 size={14} />
-            </button>
+      <main className="max-w-4xl mx-auto space-y-6">
+        
+        {protocols.length === 0 ? (
+           <div className="text-center py-20 bg-white border-2 border-dashed border-slate-300 rounded-[40px] shadow-sm">
+              <Utensils size={48} className="mx-auto mb-4 text-slate-300" />
+              <h2 className="text-2xl font-black italic uppercase text-slate-400 mb-2">Nenhuma dieta ativa</h2>
+              <p className="text-sm font-bold text-slate-400 mb-6">Este aluno ainda não possui uma dieta prescrita.</p>
+              <button 
+                onClick={() => router.push(`/dashboard-coach/aluno/${id}/editor-pro`)}
+                className="bg-green-600 text-white px-8 py-4 rounded-[20px] font-black uppercase tracking-widest text-xs hover:bg-slate-900 transition-all shadow-xl"
+              >
+                Prescrever Agora
+              </button>
+           </div>
+        ) : (
+          <>
+            {/* ABAS DE PROTOCOLOS (Se houver mais de 1) */}
+            {protocols.length > 1 && (
+              <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar">
+                {protocols.map((p, idx) => (
+                  <button 
+                    key={idx} 
+                    onClick={() => setActiveProtocolIndex(idx)}
+                    className={`px-5 sm:px-6 py-3 sm:py-3.5 rounded-[16px] sm:rounded-2xl font-black uppercase text-[10px] sm:text-xs whitespace-nowrap transition-all shadow-sm
+                      ${activeProtocolIndex === idx 
+                        ? 'bg-slate-900 text-white border border-slate-900' 
+                        : 'bg-white text-slate-400 border border-slate-200 hover:border-green-400 hover:text-green-600'
+                      }
+                    `}
+                  >
+                    {p.name || `Protocolo ${idx + 1}`}
+                  </button>
+                ))}
+              </div>
+            )}
 
-            {/* Linha 1: Horário e Calorias */}
-            <div className="flex gap-2 mb-2">
-              <div className="flex items-center gap-1 bg-slate-100 px-3 py-2 rounded-xl flex-1 border border-slate-200">
-                <Clock size={14} className="text-blue-600" />
-                <input 
-                  type="time" 
-                  value={meal.time}
-                  onChange={e => updateMeal(index, 'time', e.target.value)}
-                  className="bg-transparent font-black text-xs outline-none w-full uppercase"
-                />
-              </div>
-              <div className="flex items-center gap-1 bg-slate-100 px-3 py-2 rounded-xl w-24 border border-slate-200">
-                <Flame size={14} className="text-orange-500" />
-                <input 
-                  type="number" 
-                  value={String(meal.calories).replace(/[^0-9]/g, '')}
-                  onChange={e => updateMeal(index, 'calories', e.target.value)}
-                  className="bg-transparent font-black text-xs outline-none w-full text-right"
-                  placeholder="0"
-                />
-                <span className="text-[8px] font-black opacity-50">kcal</span>
-              </div>
+            {/* LISTAGEM DE REFEIÇÕES DO PROTOCOLO ATIVO */}
+            <div className="space-y-6 sm:space-y-8">
+              {protocols[activeProtocolIndex].meals?.map((meal: any, mIdx: number) => (
+                <div key={mIdx} className="bg-white rounded-[35px] border border-slate-100 p-6 sm:p-8 shadow-sm relative overflow-hidden group">
+                  <div className="absolute top-0 left-0 w-1.5 h-full bg-green-500 rounded-l-[35px]"></div>
+                  
+                  {/* Cabeçalho da Refeição */}
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6 pb-4 border-b border-slate-50">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-slate-100 text-slate-600 px-3 py-1.5 rounded-full text-[10px] font-black flex items-center gap-1.5">
+                        <Clock size={12} /> {meal.time || '--:--'}
+                      </div>
+                      <h3 className="text-xl sm:text-2xl font-black uppercase italic text-slate-800 leading-none">{meal.title || 'Refeição'}</h3>
+                    </div>
+                  </div>
+
+                  {/* Observações da Refeição */}
+                  {meal.observations && (
+                    <div className="mb-6 bg-amber-50/50 border border-amber-100 p-4 rounded-[20px] flex items-start gap-3">
+                      <AlertCircle size={18} className="text-amber-500 shrink-0 mt-0.5" />
+                      <p className="text-xs font-semibold text-amber-800 italic">{meal.observations}</p>
+                    </div>
+                  )}
+
+                  {/* Alimentos e Substitutos */}
+                  <div className="space-y-3 pl-1 sm:pl-2">
+                    {meal.items?.length > 0 ? (
+                      meal.items.map((item: any, iIdx: number) => (
+                        <div key={iIdx} className="flex flex-col gap-2">
+                          
+                          {/* Alimento Principal */}
+                          <div className="flex items-center gap-4 bg-slate-50 p-3 sm:p-4 rounded-[20px] border border-slate-100 hover:border-green-200 transition-colors">
+                            <div className="bg-white border border-slate-200 px-3 py-2 rounded-[14px] min-w-[70px] text-center shadow-sm">
+                               <span className="font-black text-lg text-slate-900 block leading-none">{item.amount || '0'}</span>
+                               <span className="text-[9px] font-black uppercase text-slate-400 block mt-1">{item.unit || 'g'}</span>
+                            </div>
+                            <span className="font-bold text-sm sm:text-base text-slate-800 uppercase flex-1">{item.name}</span>
+                          </div>
+
+                          {/* Lista de Substitutos (Abaixo do alimento principal) */}
+                          {item.substitutes?.length > 0 && (
+                            <div className="pl-6 sm:pl-10 space-y-2 mt-1 relative">
+                              <div className="absolute left-[38px] top-0 w-px h-full bg-slate-200 hidden sm:block"></div>
+                              {item.substitutes.map((sub: any, sIdx: number) => (
+                                <div key={sIdx} className="flex items-center gap-3 bg-white border border-slate-200 p-2.5 rounded-[16px] relative z-10 w-fit pr-6">
+                                  <div className="w-6 h-6 bg-green-50 rounded-full flex items-center justify-center shrink-0">
+                                    <ArrowRightLeft size={12} className="text-green-600" />
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                     <span className="font-black text-xs text-slate-900 bg-slate-100 px-2 py-1 rounded-[8px]">{sub.amount}{sub.unit}</span>
+                                     <span className="text-[10px] sm:text-[11px] font-bold uppercase text-slate-600 truncate max-w-[200px] sm:max-w-none">{sub.name}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs font-bold text-slate-400 italic py-4">Nenhum alimento cadastrado nesta refeição.</p>
+                    )}
+                  </div>
+
+                </div>
+              ))}
             </div>
-
-            {/* Linha 2: Título */}
-            <input 
-              type="text" 
-              value={meal.title}
-              onChange={e => updateMeal(index, 'title', e.target.value)}
-              className="w-full font-black uppercase italic text-lg outline-none border-b-2 border-transparent focus:border-blue-600 mb-3 placeholder:opacity-30"
-              placeholder="NOME DA REFEIÇÃO"
-            />
-
-            {/* Linha 3: Itens (Textarea Inteligente) */}
-            <textarea 
-              value={meal.itemsText}
-              onChange={e => updateMeal(index, 'itemsText', e.target.value)}
-              className="w-full text-sm font-bold text-slate-600 bg-slate-50 p-3 rounded-xl outline-none border-2 border-transparent focus:border-blue-600 resize-none h-24 leading-relaxed"
-              placeholder="Digite os alimentos (um por linha)..."
-            />
-          </div>
-        ))}
-
-        {/* Botão Adicionar Refeição */}
-        <button 
-          onClick={addMeal}
-          className="w-full py-4 border-2 border-dashed border-slate-300 rounded-[25px] text-slate-400 font-black uppercase flex items-center justify-center gap-2 hover:border-blue-600 hover:text-blue-600 hover:bg-blue-50 transition-all"
-        >
-          <Plus size={20} /> Adicionar Refeição
-        </button>
+          </>
+        )}
       </main>
 
-      {/* Barra de Ação Flutuante */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-md px-6 flex gap-3">
-        <button 
-          onClick={() => router.push(`/dashboard-coach/aluno/${id}/gerar-dieta-ia`)}
-          className="bg-white text-black border-2 border-black p-4 rounded-[20px] shadow-lg hover:bg-slate-50 active:scale-95 transition-all"
-          title="Refazer com IA"
-        >
-          <RotateCcw size={24} />
-        </button>
-        
-        <button 
-          onClick={handleSave}
-          disabled={!hasChanges}
-          className={`flex-1 p-4 rounded-[20px] font-black uppercase text-sm flex items-center justify-center gap-3 shadow-[0px_10px_30px_rgba(0,0,0,0.2)] transition-all active:scale-95
-            ${hasChanges ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-black text-white'}
-          `}
-        >
-          <Save size={20} />
-          {hasChanges ? 'Salvar Alterações' : 'Tudo Atualizado'}
-        </button>
-      </div>
+      {/* FOOTER FIXO (Apenas se tiver dieta) */}
+      {protocols.length > 0 && (
+        <footer className="fixed bottom-0 left-0 right-0 p-4 sm:p-6 bg-white/90 backdrop-blur-xl border-t border-slate-200 z-40">
+          <button 
+            onClick={() => router.push(`/dashboard-coach/aluno/${id}/editor-pro`)}
+            className="max-w-4xl mx-auto w-full bg-slate-900 text-white py-5 sm:py-6 rounded-[25px] font-black uppercase tracking-[0.2em] text-xs sm:text-sm shadow-xl hover:bg-green-600 transition-all active:scale-[0.98] flex items-center justify-center gap-3"
+          >
+            <Edit3 size={20} className="text-green-400" /> Desbloquear Edição no Master
+          </button>
+        </footer>
+      )}
+
     </div>
   );
 }

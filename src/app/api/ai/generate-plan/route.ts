@@ -1,25 +1,29 @@
 import { sql } from "@/lib/db";
 import { NextResponse } from "next/server";
 
-// --- FUNÇÃO FAXINEIRO ATUALIZADA (SUPORTE A OBJETOS DE SUBSTITUIÇÃO) ---
+// --- FUNÇÃO FAXINEIRO ATUALIZADA (SUPORTE A OBJETOS DE SUBSTITUIÇÃO E QUANTIDADES SEPARADAS) ---
 function sanitizeDiet(diet: any[]) {
   if (!Array.isArray(diet)) return [];
   return diet.map(meal => ({
     time: meal.time || "00:00",
     title: meal.title || "Refeição",
     calories: String(meal.calories).replace(/[^0-9]/g, ''), 
-    // Mapeia os itens para garantir que cada um tenha sua própria lista de substitutos definida pelo Coach/IA
+    // Mapeia os itens garantindo amount, unit, name separados e a lista de substitutos
     items: Array.isArray(meal.items) 
       ? meal.items.map((item: any) => {
-          // Se a IA devolver apenas string, transformamos no novo formato de objeto
+          // Se por um milagre a IA devolver apenas string, transformamos no formato correto
           if (typeof item === 'string') {
             return {
               name: item,
+              amount: "",
+              unit: "",
               substitutes: [] // Fica vazio para o Coach preencher manualmente ou via seletor
             };
           }
           return {
             name: item.name || "Alimento",
+            amount: item.amount || "",
+            unit: item.unit || "",
             substitutes: Array.isArray(item.substitutes) ? item.substitutes : []
           };
         })
@@ -35,29 +39,48 @@ export async function POST(req: Request) {
     if (!process.env.OPENAI_API_KEY) return NextResponse.json({ error: "Chave da API não configurada" }, { status: 500 });
 
     const methodology = `
-      Você é o Coach Paulo Adriano (Shape Natural). Estilo Old School.
+      Você é o Coach Paulo Adriano (Shape Natural). Estilo Old School e direto ao ponto.
       
       Sua tarefa é gerar a base da dieta. O Coach irá revisar e adicionar substitutos manualmente depois.
       
       REGRAS DE NOMENCLATURA:
       1. FEIJÃO: "Feijão Preto Cozido" ou "Feijão Carioca Cozido".
-      2. PROTEÍNA REFEIÇÃO: [Frango Grelhado, Carne Moída (Patinho), Tilápia Grelhada, Lombo Suíno Grelhado, Ovos Inteiros (Refeição)].
-      3. PROTEÍNA LANCHE: [Ovos Inteiros, Whey Protein Isolado, Queijo Cottage ZL, Atum em Conserva].
+      2. PROTEÍNA REFEIÇÃO: [Frango Grelhado, Carne Moída (Patinho), Tilápia Grelhada, Lombo Suíno Grelhado, Ovos Inteiros].
+      3. PROTEÍNA LANCHE: [Ovos Inteiros, Whey Protein Isolado, Queijo Cottage, Atum em Conserva].
       4. CARBOS: [Arroz Branco, Batata Inglesa Cozida, Pão Integral, Tapioca (massa)].
 
-      DIRETRIZES:
+      DIRETRIZES TÉCNICAS:
       - Ovos: 100g de frango = 5 un de Ovos Inteiros.
       - Base de Pão: 50g.
     `;
 
+    // PROMPT ATUALIZADO: FORÇANDO A SEPARAÇÃO DE NOME, QUANTIDADE E UNIDADE
     const prompt = `
       ${methodology}
-      Gere um plano para ${name} (${weight}kg, ${goal}).
+      Gere um plano para ${name} (${weight}kg, ${height}cm, objetivo: ${goal}).
+      Instruções adicionais: ${observations || 'Nenhuma.'}
       
-      FORMATO JSON OBRIGATÓRIO (ARRAY DE OBJETOS):
-      Cada refeição deve ter um array de "items". Cada item deve ser um objeto: {"name": "QUANTIDADE + NOME"}.
+      FORMATO JSON OBRIGATÓRIO (ARRAY DE OBJETOS DE REFEIÇÕES):
+      Cada refeição deve ter "time", "title", "calories", e um array de "items".
       
-      Exemplo de item: {"name": "100g de Frango Grelhado"}
+      REGRA ESTRITA DE ITEMS: 
+      NUNCA coloque o número e a medida no campo "name" (Proibido: "2 fatias de pão").
+      O campo "name" deve ter APENAS o nome limpo. 
+      Coloque o valor numérico em "amount" e a medida de grandeza em "unit".
+      
+      Exemplo do formato JSON OBRIGATÓRIO:
+      [
+        {
+          "time": "08:00",
+          "title": "Café da Manhã",
+          "calories": "350",
+          "items": [
+            { "name": "Pão Integral", "amount": 2, "unit": "fatias" },
+            { "name": "Ovo Inteiro", "amount": 3, "unit": "un" },
+            { "name": "Mamão", "amount": 100, "unit": "g" }
+          ]
+        }
+      ]
     `;
 
     const openAIResponse = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -82,7 +105,7 @@ export async function POST(req: Request) {
     const rawDiet = JSON.parse(dietContent);
     const cleanDietData = sanitizeDiet(rawDiet);
 
-    // Arquiva a anterior e salva a nova com suporte a substitutos manuais
+    // Arquiva a anterior e salva a nova com suporte a substitutos manuais e unidades separadas
     await sql`UPDATE public.diet_plans SET status = 'archived' WHERE student_id = ${studentId}::uuid`;
     
     await sql`
