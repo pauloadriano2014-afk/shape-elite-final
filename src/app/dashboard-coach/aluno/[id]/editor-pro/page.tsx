@@ -269,56 +269,55 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
   );
 
   return (
-    <div className="min-h-[100dvh] bg-slate-50 p-4 sm:p-6 font-sans pb-[env(safe-area-inset-bottom,120px)] text-black">
-      
-      {/* HEADER FIXO COM BOTÃO DE TEMPLATE */}
-      <header className="max-w-4xl mx-auto mb-6 sm:mb-8 flex items-center justify-between sticky top-0 bg-slate-50/90 backdrop-blur-md z-30 py-4 border-b border-slate-200">
-        <div className="flex items-center gap-3 sm:gap-4">
-          <button onClick={() => router.back()} className="p-3 bg-white border border-slate-200 rounded-[14px] sm:rounded-[20px] shadow-sm hover:border-green-400 hover:text-green-600 transition-all flex items-center gap-2">
-            <ArrowLeft size={20} /> <span className="hidden sm:inline text-[11px] font-black uppercase tracking-widest">Voltar</span>
-          </button>
-          <h1 className="text-xl sm:text-2xl font-black uppercase italic tracking-tighter text-slate-800 leading-none">
-            Editor <span className="text-green-600">MASTER</span>
-          </h1>
-        </div>
+    <div className="min-h-screen bg-slate-50 text-black font-sans flex flex-col relative overflow-x-hidden">
 
-        {/* Botões de Salvar Template */}
-        <button 
-          onClick={() => setShowTemplateModal(true)}
-          className="hidden sm:flex items-center gap-2 bg-slate-900 text-white px-4 py-2.5 rounded-[16px] text-[10px] font-black uppercase tracking-widest hover:bg-green-600 transition-all shadow-sm shrink-0"
-        >
-          <Copy size={14} className="text-green-400" /> Salvar Template
-        </button>
-        <button 
-          onClick={() => setShowTemplateModal(true)}
-          className="sm:hidden bg-slate-900 text-white p-2.5 rounded-[14px] hover:bg-green-600 transition-all shadow-sm shrink-0"
-        >
-          <Copy size={18} className="text-green-400" />
-        </button>
-      </header>
-
-      <main className="max-w-4xl mx-auto space-y-6">
+      {/* BLOCO ÚNICO FIXO NO TOPO (Header + Abas travados juntos) */}
+      <div className="fixed top-0 left-0 right-0 z-[100] bg-white/95 backdrop-blur-xl border-b border-slate-200 shadow-sm">
         
-        {/* --- ABAS DE PROTOCOLOS --- */}
-        <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar">
-            {protocols.map((p, idx) => (
-               <button 
-                  key={p.id} 
-                  onClick={() => setActiveProtocolIndex(idx)}
-                  className={`px-5 sm:px-6 py-3 sm:py-3.5 rounded-[16px] sm:rounded-2xl font-black uppercase text-[10px] sm:text-xs whitespace-nowrap transition-all shadow-sm
-                    ${activeProtocolIndex === idx 
-                      ? 'bg-slate-900 text-white border border-slate-900' 
-                      : 'bg-white text-slate-400 border border-slate-200 hover:border-green-400 hover:text-green-600'
-                    }
-                  `}
-               >
-                  {p.name}
-               </button>
-            ))}
-            <button onClick={addProtocol} className="px-5 py-3 bg-green-50 text-green-600 border border-green-200 rounded-[16px] sm:rounded-2xl font-black uppercase text-[10px] sm:text-xs whitespace-nowrap hover:bg-green-600 hover:text-white transition-all flex items-center gap-2 shrink-0">
-               <Plus size={14} className="sm:w-4 sm:h-4"/> Adicionar Ciclo
-            </button>
+        {/* PARTE DE CIMA: Voltar e Salvar Template */}
+        <header className="px-4 sm:px-6 pt-[max(1rem,env(safe-area-inset-top))] pb-3">
+          <div className="max-w-4xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <button onClick={() => router.back()} className="p-2.5 bg-white border border-slate-200 rounded-xl hover:text-green-600 transition-all flex items-center gap-2 active:scale-90">
+                <ArrowLeft size={20} /> <span className="hidden sm:inline text-[11px] font-black uppercase tracking-widest">Voltar</span>
+              </button>
+              <h1 className="text-xl sm:text-2xl font-black uppercase italic tracking-tighter text-slate-800 leading-none">
+                Editor <span className="text-green-600">MASTER</span>
+              </h1>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setShowTemplateModal(true)} className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-green-600 transition-all shadow-sm active:scale-90">
+                <Copy size={14} className="text-green-400" /> <span className="hidden sm:inline">Salvar Template</span>
+              </button>
+              <button onClick={() => setShowTemplateModal(true)} className="sm:hidden bg-slate-900 text-white p-2.5 rounded-xl hover:bg-green-600 transition-all shadow-sm active:scale-90">
+                <Copy size={18} className="text-green-400" />
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* PARTE DE BAIXO: Abas de Ciclos (Travadas para não encavalar) */}
+        <div className="px-4 sm:px-6 pb-3 max-w-4xl mx-auto">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar py-2">
+              {protocols.map((p, idx) => (
+                 <button key={p.id} onClick={() => setActiveProtocolIndex(idx)}
+                    className={`px-5 py-3 rounded-2xl font-black uppercase text-[10px] whitespace-nowrap transition-all shadow-sm border
+                      ${activeProtocolIndex === idx 
+                        ? 'bg-slate-900 text-white border-slate-900' 
+                        : 'bg-white text-slate-400 border border-slate-200'
+                      }
+                    `}
+                 > {p.name} </button>
+              ))}
+              <button onClick={addProtocol} className="px-5 py-3 bg-green-50 text-green-600 border border-green-200 rounded-2xl font-black uppercase text-[10px] whitespace-nowrap flex items-center gap-2 shrink-0 active:scale-95">
+                 <Plus size={14}/> Ciclo
+              </button>
+          </div>
         </div>
+      </div>
+
+      {/* CONTEÚDO (Com calço de 180px para aparecer abaixo do bloco fixo) */}
+      <main className="flex-1 max-w-4xl mx-auto w-full px-4 sm:px-6 pt-[calc(180px+env(safe-area-inset-top))] pb-[250px] space-y-6">
 
         {/* --- CONFIGURAÇÃO DO PROTOCOLO ATIVO --- */}
         <div className="bg-white p-5 sm:p-8 rounded-[35px] border border-slate-100 shadow-[0_10px_30px_-15px_rgba(0,0,0,0.1)] relative animate-in fade-in slide-in-from-bottom-2 overflow-hidden">
@@ -398,16 +397,19 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
                    </div>
                 </div>
 
-                {/* OBSERVAÇÕES ELEGANTES */}
+                {/* OBSERVAÇÕES (Ajustado para não cortar o texto) */}
                 <div className="mb-6 sm:mb-8 pl-1 sm:pl-2">
                    <div className="relative">
-                      <FileText size={16} className="absolute top-4 left-4 text-amber-500" />
+                      <FileText size={18} className="absolute top-5 left-4 text-amber-500" />
                       <textarea 
                         placeholder="Adicionar observações, modo de preparo ou instruções..."
-                        className="w-full pl-12 pr-4 py-3.5 bg-amber-50/50 border border-amber-100/50 rounded-[20px] text-sm font-bold text-slate-700 outline-none resize-none focus:bg-white focus:border-amber-300 transition-all min-h-[50px] placeholder:text-amber-500/50"
-                        rows={meal.observations ? 2 : 1}
+                        className="w-full pl-12 pr-4 py-5 bg-amber-50/50 border border-amber-100/50 rounded-[24px] text-sm font-bold text-slate-700 outline-none resize-none focus:bg-white focus:border-amber-300 transition-all min-h-[100px] leading-relaxed placeholder:text-amber-500/40"
                         value={meal.observations}
-                        onChange={(e) => { const n = [...protocols]; n[activeProtocolIndex].meals[mIdx].observations = e.target.value; setProtocols(n); }}
+                        onChange={(e) => { 
+                          const n = [...protocols]; 
+                          n[activeProtocolIndex].meals[mIdx].observations = e.target.value; 
+                          setProtocols(n); 
+                        }}
                       />
                    </div>
                 </div>
@@ -567,9 +569,9 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
         </div>
       )}
 
-      {/* FOOTER SALVAR */}
-      <footer className="fixed bottom-0 left-0 right-0 p-4 sm:p-6 bg-white/80 backdrop-blur-xl border-t border-slate-200 z-40">
-        <button onClick={saveDiet} className="max-w-4xl mx-auto w-full bg-slate-900 text-white py-5 sm:py-6 rounded-[25px] font-black uppercase tracking-[0.2em] text-xs sm:text-sm shadow-xl shadow-slate-900/20 hover:bg-green-600 hover:shadow-green-600/30 transition-all active:scale-[0.98] flex items-center justify-center gap-3">
+      {/* 3. FOOTER FIXED (COM VACINA PARA BARRINHA DE GESTOS) */}
+      <footer className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-xl border-t border-slate-200 z-[100] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+        <button onClick={saveDiet} className="max-w-4xl mx-auto w-full bg-slate-900 text-white py-5 rounded-[25px] font-black uppercase tracking-[0.2em] text-xs shadow-xl hover:bg-green-600 transition-all active:scale-[0.98] flex items-center justify-center gap-3">
           <Save size={20} className="text-green-400" /> Confirmar e Enviar Dieta
         </button>
       </footer>

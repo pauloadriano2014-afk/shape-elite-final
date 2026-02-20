@@ -56,7 +56,6 @@ export default function BibliotecaGlobalPage() {
 
     setIsCloning(true);
     try {
-      // Dispara a requisição de salvar dieta para TODOS os alunos selecionados ao mesmo tempo
       await Promise.all(selectedStudents.map(studentId => 
         fetch('/api/diet/save', {
           method: 'POST',
@@ -95,27 +94,31 @@ export default function BibliotecaGlobalPage() {
   );
 
   return (
-    <div className="min-h-[100dvh] bg-slate-50 p-4 sm:p-6 pb-[env(safe-area-inset-bottom,24px)] text-black font-sans">
+    <div className="min-h-screen bg-slate-50 text-black font-sans flex flex-col relative overflow-x-hidden">
       
-      {/* HEADER ELITE */}
-      <header className="max-w-4xl mx-auto mb-6 sm:mb-8 flex justify-between items-center bg-white p-4 sm:p-5 rounded-[30px] border border-slate-200 shadow-sm relative overflow-hidden">
-        <button onClick={() => router.back()} className="relative z-10 text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] bg-slate-50 border border-slate-200 hover:border-green-400 p-3 sm:px-5 sm:py-3 rounded-[20px] flex items-center gap-2 hover:text-green-600 transition-all active:scale-95">
-          <ChevronLeft size={16} /> <span className="hidden sm:inline">Voltar</span>
-        </button>
-        <div className="relative z-10 text-right flex items-center gap-4">
-          <div className="text-right">
-            <h1 className="text-2xl sm:text-3xl font-black uppercase italic tracking-tighter leading-none text-slate-900">
+      {/* 1. HEADER FIXO (BLINDADO CONTRA NOTCH) */}
+      <div className="fixed top-0 left-0 right-0 z-[100] bg-slate-50/80 backdrop-blur-md px-4 sm:px-6 pt-[max(1rem,env(safe-area-inset-top))] pb-4">
+        <header className="max-w-4xl mx-auto flex justify-between items-center bg-white p-4 sm:p-5 rounded-[25px] sm:rounded-[30px] border border-slate-200 shadow-sm relative overflow-hidden">
+          <button onClick={() => router.back()} className="relative z-10 text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] bg-slate-50 border border-slate-200 hover:border-green-400 p-3 sm:px-5 sm:py-3 rounded-[18px] sm:rounded-[20px] flex items-center gap-2 hover:text-green-600 transition-all active:scale-95">
+            <ChevronLeft size={16} /> <span className="hidden sm:inline">Voltar</span>
+          </button>
+          
+          <div className="relative z-10 text-right">
+            <h1 className="text-xl sm:text-2xl font-black uppercase italic tracking-tighter leading-none text-slate-900">
               Biblioteca <span className="text-green-600">Global</span>
             </h1>
-            <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mt-1">Disparo em Massa</p>
+            <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 mt-1">Disparo em Massa</p>
           </div>
-        </div>
-      </header>
+        </header>
+      </div>
 
-      <main className="max-w-4xl mx-auto space-y-6">
+      {/* 2. CONTEÚDO PRINCIPAL COM RESPIRO
+          pt: Compensação para o Header fixo + notch
+      */}
+      <main className="flex-1 max-w-4xl mx-auto w-full px-4 sm:px-6 pt-[calc(100px+env(safe-area-inset-top))] pb-[env(safe-area-inset-bottom,40px)] space-y-6">
         
         {/* BARRA DE PESQUISA */}
-        <div className="relative group">
+        <div className="relative group mt-2">
           <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-green-600 transition-colors" size={20} />
           <input 
             type="text"
@@ -137,7 +140,7 @@ export default function BibliotecaGlobalPage() {
                <p className="text-sm font-bold text-slate-400 mb-6">Você ainda não salvou nenhuma dieta como template.</p>
             </div>
           ) : filteredTemplates.length === 0 ? (
-            <div className="col-span-full text-center p-10 text-slate-400 font-bold bg-white rounded-[30px] border border-slate-100">Nenhum template encontrado com esse nome.</div>
+            <div className="col-span-full text-center p-10 text-slate-400 font-bold bg-white rounded-[30px] border border-slate-100 shadow-sm">Nenhum template encontrado com esse nome.</div>
           ) : (
             filteredTemplates.map((template) => (
               <div key={template.id} className="bg-white p-6 rounded-[30px] border border-slate-100 shadow-sm hover:shadow-[0_10px_30px_-15px_rgba(0,0,0,0.1)] hover:border-green-200 transition-all group flex flex-col justify-between relative overflow-hidden">
@@ -160,11 +163,11 @@ export default function BibliotecaGlobalPage() {
                 <button 
                   onClick={() => {
                     setCloningTemplate(template);
-                    setSelectedStudents([]); // Reseta a lista ao abrir
+                    setSelectedStudents([]); 
                   }}
-                  className="w-full bg-slate-900 text-white px-6 py-4 rounded-[20px] font-black uppercase tracking-[0.2em] text-[10px] flex items-center justify-center gap-3 shadow-xl hover:bg-green-600 hover:shadow-green-500/30 transition-all active:scale-95"
+                  className="w-full bg-slate-900 text-white px-6 py-4 rounded-[20px] font-black uppercase tracking-[0.2em] text-[10px] flex items-center justify-center gap-3 shadow-xl hover:bg-green-600 transition-all active:scale-95"
                 >
-                  <Users size={16} className="text-green-400 group-hover:text-white transition-colors" /> SELECIONAR ALUNOS
+                  <Users size={16} className="text-green-400" /> SELECIONAR ALUNOS
                 </button>
               </div>
             ))
@@ -172,19 +175,17 @@ export default function BibliotecaGlobalPage() {
         </div>
       </main>
 
-      {/* MODAL DE SELEÇÃO DE ALUNOS (DISPARO EM MASSA) */}
+      {/* 3. MODAL DE SELEÇÃO (Z-INDEX SUPERIOR) */}
       {cloningTemplate && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-4">
-          <div className="bg-white w-full max-w-lg h-[85vh] sm:h-[600px] rounded-t-[35px] sm:rounded-[40px] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-10 border border-slate-100">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-end sm:items-center justify-center sm:p-4">
+          <div className="bg-white w-full max-w-lg h-[85vh] sm:h-[600px] rounded-t-[35px] sm:rounded-[40px] shadow-2xl flex flex-col overflow-hidden border border-slate-100">
             
-            {/* Header do Modal */}
             <div className="p-5 sm:p-6 border-b border-slate-100 bg-slate-900 text-white relative">
               <button onClick={() => setCloningTemplate(null)} className="absolute top-5 right-5 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all"><X size={20}/></button>
               <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-green-400 mb-1">Clonando Template</h2>
               <h3 className="text-2xl font-black uppercase italic truncate pr-8">{cloningTemplate.name}</h3>
             </div>
 
-            {/* Busca de Alunos */}
             <div className="p-4 border-b border-slate-100 bg-slate-50">
                <div className="flex items-center gap-3 bg-white border border-slate-200 p-3 rounded-[16px] focus-within:border-green-500 transition-all shadow-sm">
                   <Search className="text-slate-400" size={18}/>
@@ -192,7 +193,6 @@ export default function BibliotecaGlobalPage() {
                </div>
             </div>
 
-            {/* Lista de Alunos (Checkboxes) */}
             <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-white">
               <button 
                 onClick={() => {
@@ -224,11 +224,10 @@ export default function BibliotecaGlobalPage() {
                   </button>
                 )
               })}
-              {filteredStudents.length === 0 && <p className="text-center text-slate-400 font-bold mt-10">Nenhum aluno encontrado.</p>}
+              {filteredStudents.length === 0 && <p className="text-center text-slate-400 font-bold mt-10">Nenhum atleta encontrado.</p>}
             </div>
 
-            {/* Footer do Modal (Botão de Disparo) */}
-            <div className="p-4 sm:p-6 border-t border-slate-100 bg-slate-50">
+            <div className="p-4 sm:p-6 border-t border-slate-100 bg-slate-50 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
               <button 
                 onClick={handleConfirmClone}
                 disabled={selectedStudents.length === 0 || isCloning}
@@ -248,6 +247,10 @@ export default function BibliotecaGlobalPage() {
         </div>
       )}
 
+      <style jsx global>{`
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      `}</style>
     </div>
   );
 }

@@ -58,60 +58,63 @@ export default function DashboardCoachPage() {
   );
 
   return (
-    <div className="min-h-[100dvh] bg-slate-50 p-4 sm:p-6 text-black font-sans pb-[env(safe-area-inset-bottom,100px)]">
+    <div className="min-h-screen bg-slate-50 text-black font-sans flex flex-col relative overflow-x-hidden">
       
-      {/* HEADER ELITE COM A LOGO */}
-      <header className="max-w-5xl mx-auto mb-8 sm:mb-12 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0 bg-white p-6 rounded-[35px] border-2 border-slate-100 shadow-sm relative overflow-hidden">
-        {/* Detalhe de cor no fundo do header */}
-        <div className="absolute top-0 right-0 w-32 h-32 bg-green-600 rounded-full blur-[80px] opacity-10 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+      {/* HEADER ELITE FIXO (PROTEÇÃO CONTRA VAZAMENTO NO TOPO) */}
+      <div className="fixed top-0 left-0 right-0 z-[100] bg-slate-50/80 backdrop-blur-md px-4 sm:px-6 pt-[max(1rem,env(safe-area-inset-top))] pb-4">
+        <header className="max-w-5xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0 bg-white p-5 sm:p-6 rounded-[30px] sm:rounded-[35px] border-2 border-slate-100 shadow-sm relative overflow-hidden">
+          {/* Detalhe de cor no fundo do header */}
+          <div className="absolute top-0 right-0 w-32 h-32 bg-green-600 rounded-full blur-[80px] opacity-10 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
 
-        {/* LOGO E TÍTULO */}
-        <div className="relative z-10 flex items-center gap-4">
-          
-          <div className="w-16 h-16 sm:w-20 sm:h-20 bg-slate-900 rounded-full border-2 border-green-500 overflow-hidden shadow-[0_0_15px_rgba(22,163,74,0.3)] shrink-0 flex items-center justify-center relative">
-             <Image 
-               src="/logo.png" 
-               alt="Shape de Elite Logo" 
-               fill
-               sizes="(max-width: 768px) 64px, 80px"
-               className="object-cover"
-               priority
-             />
-          </div>
-
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-2 h-2 bg-green-600 rounded-full animate-pulse"></div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Paulo Adriano Team</p>
+          {/* LOGO E TÍTULO */}
+          <div className="relative z-10 flex items-center gap-4">
+            <div className="w-14 h-14 sm:w-20 sm:h-20 bg-slate-900 rounded-full border-2 border-green-500 overflow-hidden shadow-[0_0_15px_rgba(22,163,74,0.3)] shrink-0 flex items-center justify-center relative">
+               <Image 
+                 src="/logo.png" 
+                 alt="Shape de Elite Logo" 
+                 fill
+                 sizes="(max-width: 768px) 56px, 80px"
+                 className="object-cover"
+                 priority
+               />
             </div>
-            <h1 className="text-3xl sm:text-4xl font-black uppercase italic tracking-tighter leading-none">
-              CENTRO <span className="text-green-600">DE COMANDO</span>
-            </h1>
+
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-2 h-2 bg-green-600 rounded-full animate-pulse"></div>
+                <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Paulo Adriano Team</p>
+              </div>
+              <h1 className="text-2xl sm:text-4xl font-black uppercase italic tracking-tighter leading-none">
+                CENTRO <span className="text-green-600">DE COMANDO</span>
+              </h1>
+            </div>
           </div>
-        </div>
-        
-        {/* BOTÕES */}
-        <div className="flex gap-3 sm:gap-4 w-full sm:w-auto relative z-10">
-          <button onClick={handleLogout} className="bg-slate-50 text-slate-400 border border-slate-200 p-4 rounded-[20px] hover:text-red-500 hover:bg-red-50 transition-all active:scale-95 shrink-0 flex items-center justify-center">
-            <LogOut size={24} />
-          </button>
           
-          {/* BOTÃO DA BIBLIOTECA GLOBAL */}
-          <button onClick={() => router.push('/dashboard-coach/biblioteca')} className="bg-green-50 text-green-600 border border-green-200 p-4 rounded-[20px] hover:bg-green-600 hover:text-white transition-all active:scale-95 shrink-0 flex items-center justify-center" title="Biblioteca Global (Clonar Dietas)">
-            <Copy size={24} />
-          </button>
+          {/* BOTÕES NO HEADER */}
+          <div className="flex gap-3 sm:gap-4 w-full sm:w-auto relative z-10">
+            <button onClick={handleLogout} className="bg-slate-50 text-slate-400 border border-slate-200 p-3.5 sm:p-4 rounded-[18px] sm:rounded-[20px] hover:text-red-500 transition-all active:scale-95 shrink-0 flex items-center justify-center">
+              <LogOut size={22} />
+            </button>
+            
+            <button onClick={() => router.push('/dashboard-coach/biblioteca')} className="bg-green-50 text-green-600 border border-green-200 p-3.5 sm:p-4 rounded-[18px] sm:rounded-[20px] hover:bg-green-600 hover:text-white transition-all active:scale-95 shrink-0 flex items-center justify-center">
+              <Copy size={22} />
+            </button>
 
-          <button onClick={() => router.push('/dashboard-coach/novo-aluno')} className="flex-1 sm:flex-none bg-slate-900 text-white p-4 rounded-[20px] shadow-xl hover:bg-green-600 hover:shadow-green-500/30 transition-all active:scale-95 flex items-center justify-center gap-2">
-            <Plus size={24} />
-            <span className="font-black uppercase text-xs tracking-widest">Novo Atleta</span>
-          </button>
-        </div>
-      </header>
+            <button onClick={() => router.push('/dashboard-coach/novo-aluno')} className="flex-1 sm:flex-none bg-slate-900 text-white p-3.5 sm:p-4 rounded-[18px] sm:rounded-[20px] shadow-xl hover:bg-green-600 transition-all active:scale-95 flex items-center justify-center gap-2">
+              <Plus size={22} />
+              <span className="font-black uppercase text-[10px] sm:text-xs tracking-widest">Novo Atleta</span>
+            </button>
+          </div>
+        </header>
+      </div>
 
-      <main className="max-w-5xl mx-auto space-y-6 sm:space-y-8">
+      {/* CONTEÚDO PRINCIPAL COM RECUO COMPENSATÓRIO 
+          pt-[calc(210px...)]: Garante que os cards comecem abaixo do header fixo + notch
+      */}
+      <main className="flex-1 max-w-5xl mx-auto w-full px-4 sm:px-6 pt-[calc(210px+env(safe-area-inset-top))] sm:pt-[calc(160px+env(safe-area-inset-top))] pb-[env(safe-area-inset-bottom,120px)] space-y-6 sm:space-y-8">
         
         {/* CARDS DE ESTATÍSTICAS */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
             <div className="bg-green-600 p-6 sm:p-8 rounded-[30px] text-white shadow-[0_10px_30px_rgba(22,163,74,0.3)] relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-6 opacity-20">
                     <Users size={64} />
@@ -191,10 +194,9 @@ export default function DashboardCoachPage() {
                   </div>
                 </div>
 
-                {/* INDICADORES E BOTÃO AÇÃO (RESPONSIVO) */}
+                {/* INDICADORES E BOTÃO AÇÃO */}
                 <div className="flex items-center justify-between lg:justify-end gap-4 sm:gap-6 w-full lg:w-auto border-t lg:border-t-0 lg:border-l border-slate-100 pt-5 lg:pt-0 lg:pl-8">
                    
-                   {/* Widgets de Check-in */}
                    <div className="flex gap-3 sm:gap-6 flex-1 lg:flex-none justify-center">
                      <div className="flex flex-col items-center gap-1.5 sm:gap-2">
                         <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-[14px] sm:rounded-2xl flex items-center justify-center transition-colors ${student.today_water > 0 ? 'bg-blue-50 text-blue-500 shadow-sm' : 'bg-slate-50 text-slate-200'}`}>
@@ -218,7 +220,6 @@ export default function DashboardCoachPage() {
                      </div>
                    </div>
 
-                   {/* Botão de Editar */}
                    <button 
                      onClick={() => router.push(`/dashboard-coach/aluno/${student.id}`)} 
                      className="bg-slate-900 text-white p-4 sm:p-5 rounded-[16px] sm:rounded-[20px] hover:bg-green-600 transition-all shadow-lg active:scale-90 shrink-0 flex items-center justify-center"
@@ -231,8 +232,12 @@ export default function DashboardCoachPage() {
             </div>
           ))}
         </div>
-
       </main>
+
+      <style jsx global>{`
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      `}</style>
     </div>
   );
 }

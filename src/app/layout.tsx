@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 // CONFIGURAÇÃO DE VIEWPORT PARA PWA (IMPEDE ZOOM INDESEJADO E OCUPA TELA TODA)
 export const viewport: Viewport = {
-  themeColor: "#2563eb",
+  themeColor: "#0f172a", // Corrigido para o Preto Slate Elite (combina com o topo do App)
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -22,18 +22,34 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-// METADADOS DE ELITE PARA RECONHECIMENTO COMO APP
+// METADADOS DE ELITE PARA RECONHECIMENTO COMO APP E LINKS (WHATSAPP)
 export const metadata: Metadata = {
-  title: "Shape Natural",
-  description: "Consultoria Nutricional Paulo Adriano",
+  title: "Shape Elite | Paulo Adriano Team",
+  description: "Aplicativo exclusivo de acompanhamento, dieta e alta performance.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Shape Natural",
+    title: "Shape Elite",
   },
   formatDetection: {
     telephone: false,
+  },
+  openGraph: {
+    title: 'Shape Elite | Paulo Adriano Team',
+    description: 'Aplicativo exclusivo de acompanhamento, dieta e alta performance.',
+    url: 'https://shapeelitefinal.vercel.app/',
+    siteName: 'Shape Elite',
+    images: [
+      {
+        url: '/logo.png', // Puxa a sua logo bonita pra miniatura do WhatsApp
+        width: 800,
+        height: 800,
+        alt: 'Shape Elite Logo',
+      },
+    ],
+    locale: 'pt_BR',
+    type: 'website',
   },
 };
 

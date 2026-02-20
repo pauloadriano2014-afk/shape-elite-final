@@ -317,70 +317,45 @@ export default function Home() {
 
   // --- RENDERIZAÇÃO PRINCIPAL DO WEB APP ---
   return (
-    <div className="min-h-[100dvh] bg-slate-50 font-sans pb-[env(safe-area-inset-bottom,100px)] relative text-black">
+    <div className="min-h-screen bg-slate-50 text-black font-sans flex flex-col relative overflow-x-hidden">
       
-      {/* Inputs invisíveis */}
-      <input 
-        type="file" 
-        accept="image/*" 
-        capture="environment" 
-        ref={fileInputRef} 
-        className="hidden" 
-        onChange={handleImageCapture} 
-      />
-      <input 
-        type="file" 
-        accept="image/*" 
-        ref={profileInputRef} 
-        className="hidden" 
-        onChange={handleProfileImageChange} 
-      />
+      {/* Inputs invisíveis preservados */}
+      <input type="file" accept="image/*" capture="environment" ref={fileInputRef} className="hidden" onChange={handleImageCapture} />
+      <input type="file" accept="image/*" ref={profileInputRef} className="hidden" onChange={handleProfileImageChange} />
 
-      <NutriChat studentName={user?.name || 'Atleta'} protocols={protocols} />
+      {/* Vacina para o Chat flutuar acima da Nav e não ficar escondido */}
+<div className="relative z-[120]">
+   <NutriChat studentName={user?.name || 'Atleta'} protocols={protocols} />
+</div>
 
-      {/* --- CABEÇALHO ELITE (SAFE AREA NOTCH) --- */}
-      <header className="bg-slate-900 text-white p-6 pt-[max(env(safe-area-inset-top,2.5rem),2.5rem)] rounded-b-[45px] shadow-2xl mb-8 border-b-4 border-green-600 relative overflow-hidden flex items-center justify-between">
+      {/* 1. HEADER FIXO (TRAVADO NO TOPO DO VIDRO) */}
+      <header className="fixed top-0 left-0 right-0 z-[100] bg-slate-900 text-white px-6 pt-[max(1.2rem,env(safe-area-inset-top))] pb-6 rounded-b-[45px] shadow-2xl border-b-4 border-green-600 overflow-hidden flex items-center justify-between">
         <div className="absolute top-0 right-0 w-80 h-80 bg-green-600 rounded-full blur-[120px] opacity-20 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
         
-        <div className="flex items-center gap-4 sm:gap-5 relative z-10">
-          <div 
-            onClick={() => profileInputRef.current?.click()} 
-            className="w-16 h-16 sm:w-20 sm:h-20 bg-slate-800 rounded-full border-2 border-green-500 flex items-center justify-center overflow-hidden shadow-[0_0_25px_rgba(22,163,74,0.4)] relative group cursor-pointer active:scale-95 transition-all shrink-0"
-          >
-            {/* AGORA BUSCANDO DO studentData PARA GARANTIR ATUALIZAÇÃO */}
+        <div className="flex items-center gap-4 relative z-10">
+          <div onClick={() => profileInputRef.current?.click()} className="w-16 h-16 sm:w-20 sm:h-20 bg-slate-800 rounded-full border-2 border-green-500 flex items-center justify-center overflow-hidden shadow-[0_0_25px_rgba(22,163,74,0.4)] relative group cursor-pointer active:scale-95 transition-all shrink-0">
             {studentData?.photoUrl || user?.photoUrl ? (
-                <img 
-                  src={studentData?.photoUrl || user?.photoUrl} 
-                  alt="Perfil" 
-                  className="w-full h-full object-cover object-center" 
-                />
+                <img src={studentData?.photoUrl || user?.photoUrl} alt="Perfil" className="w-full h-full object-cover" />
             ) : (
-                <User size={30} className="text-green-400 group-hover:scale-110 transition-transform" />
+                <User size={30} className="text-green-400" />
             )}
             <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                 <Camera size={18} className="text-white"/>
             </div>
           </div>
           <div className="min-w-0">
-            <p className="text-[10px] sm:text-[11px] font-black text-green-400 uppercase tracking-[0.2em] mb-1">
-              Shape Natural Elite
-            </p>
-            <h1 className="text-xl sm:text-2xl font-black uppercase italic tracking-tighter leading-none truncate max-w-[150px] sm:max-w-[200px]">
-              Fala, {user?.name ? user.name.split(' ')[0] : 'Aluno'}!
-            </h1>
+            <p className="text-[10px] font-black text-green-400 uppercase tracking-[0.2em] mb-1">Shape Natural Elite</p>
+            <h1 className="text-xl font-black uppercase italic tracking-tighter leading-none truncate max-w-[150px]">Fala, {user?.name ? user.name.split(' ')[0] : 'Aluno'}!</h1>
           </div>
         </div>
         
-        <button 
-          onClick={handleLogout} 
-          className="relative z-10 text-white/40 hover:text-red-500 transition-colors p-3 bg-white/5 rounded-2xl hover:bg-white/10 shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
-        >
+        <button onClick={handleLogout} className="relative z-10 text-white/40 hover:text-red-500 p-3 bg-white/5 rounded-2xl active:scale-90 transition-transform">
           <LogOut size={22} />
         </button>
       </header>
 
-      {/* --- CONTEÚDO PRINCIPAL (ABAS) --- */}
-      <div className="max-w-4xl mx-auto pb-10">
+      {/* 2. CONTEÚDO PRINCIPAL COM CALÇO PARA O NOTCH */}
+      <main className="flex-1 max-w-4xl mx-auto w-full pt-[calc(140px+env(safe-area-inset-top))] pb-[250px]">
           
           {/* CONTEÚDO: ABA DIETA */}
           <div className={`${activeTab === 'dieta' ? 'block' : 'hidden'} animate-in fade-in duration-300`}>
@@ -532,27 +507,20 @@ export default function Home() {
               </div>
           </div>
 
-      </div>
+      </main>
 
-      {/* --- NAVEGAÇÃO INFERIOR FIXA (ESTILO APP NATIVO) --- */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-2 pb-[max(env(safe-area-inset-bottom,0.5rem),0.5rem)] flex justify-center z-40 shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
-         <div className="w-full max-w-md flex bg-slate-50 p-1.5 rounded-[20px] mx-4 border border-slate-100">
-            <button 
-               onClick={() => setActiveTab('dieta')}
+      {/* 3. NAVEGAÇÃO INFERIOR FIXA (ESTILO APP NATIVO) */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-slate-200 p-2 pb-[max(1.2rem,env(safe-area-inset-bottom))] flex justify-center z-[110] shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
+         <div className="w-full max-w-md flex bg-slate-50 p-1.5 rounded-[22px] mx-4 border border-slate-100">
+            <button onClick={() => setActiveTab('dieta')}
                className={`flex-1 flex flex-col items-center justify-center p-3 rounded-[16px] transition-all
-                  ${activeTab === 'dieta' ? 'bg-slate-900 text-green-400 shadow-md scale-[1.02]' : 'text-slate-400 hover:text-slate-700'}`}
-            >
-               <Utensils size={20} className="mb-1" />
-               <span className="text-[9px] font-black uppercase tracking-widest">Dieta</span>
+                  ${activeTab === 'dieta' ? 'bg-slate-900 text-green-400 shadow-md scale-[1.02]' : 'text-slate-400'}`}>
+               <Utensils size={20} className="mb-1" /><span className="text-[9px] font-black uppercase tracking-widest">Dieta</span>
             </button>
-
-            <button 
-               onClick={() => setActiveTab('painel')}
+            <button onClick={() => setActiveTab('painel')}
                className={`flex-1 flex flex-col items-center justify-center p-3 rounded-[16px] transition-all
-                  ${activeTab === 'painel' ? 'bg-slate-900 text-green-400 shadow-md scale-[1.02]' : 'text-slate-400 hover:text-slate-700'}`}
-            >
-               <LayoutDashboard size={20} className="mb-1" />
-               <span className="text-[9px] font-black uppercase tracking-widest">Painel Elite</span>
+                  ${activeTab === 'painel' ? 'bg-slate-900 text-green-400 shadow-md scale-[1.02]' : 'text-slate-400'}`}>
+               <LayoutDashboard size={20} className="mb-1" /><span className="text-[9px] font-black uppercase tracking-widest">Painel Elite</span>
             </button>
          </div>
       </nav>
@@ -563,7 +531,7 @@ export default function Home() {
           <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md" onClick={() => setIsShoppingListOpen(false)} />
           
           <div className="bg-white w-full h-[95dvh] sm:h-[85vh] max-w-2xl rounded-t-[40px] sm:rounded-[50px] flex flex-col relative z-10 animate-in slide-in-from-bottom duration-500 shadow-2xl overflow-hidden pb-[env(safe-area-inset-bottom,0px)]">
-            <div className="bg-slate-900 border-b-4 border-green-600 p-6 sm:p-8 pt-[max(env(safe-area-inset-top,2rem),1.5rem)] text-white relative shrink-0">
+            <div className="bg-slate-900 border-b-4 border-green-600 p-6 sm:p-8 pt-[max(1.5rem,env(safe-area-inset-top))] text-white relative shrink-0">
                <button 
                  onClick={() => setIsShoppingListOpen(false)} 
                  className="absolute top-4 sm:top-8 right-4 sm:right-8 bg-white/10 hover:bg-white/20 p-2 sm:p-3 rounded-full transition-colors text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
@@ -702,7 +670,7 @@ export default function Home() {
           <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md" onClick={() => setIsModalOpen(false)} />
           
           <div className="bg-white w-full max-w-lg rounded-t-[40px] sm:rounded-[50px] overflow-hidden relative z-10 animate-in slide-in-from-bottom duration-500 shadow-2xl pb-[env(safe-area-inset-bottom,0px)] max-h-[85dvh] flex flex-col">
-            <div className="bg-slate-900 border-b-4 border-green-600 p-6 sm:p-8 pt-[max(env(safe-area-inset-top,1.5rem),1.5rem)] text-white relative shrink-0">
+            <div className="bg-slate-900 border-b-4 border-green-600 p-6 sm:p-8 pt-[max(1.5rem,env(safe-area-inset-top))] text-white relative shrink-0">
                <button 
                  onClick={() => setIsModalOpen(false)} 
                  className="absolute top-4 sm:top-6 right-4 sm:right-6 bg-white/10 hover:bg-white/20 p-2 sm:p-3 rounded-full transition-colors text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
