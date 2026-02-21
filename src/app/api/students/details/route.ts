@@ -15,7 +15,8 @@ export async function GET(req: Request) {
         supplements, wake_time, work_start, work_end, 
         train_time, sleep_time, routine, digestive_health,
         "photoUrl" as "photoUrl", 
-        "photoPosition" as "photoPosition" 
+        "photoPosition" as "photoPosition",
+        next_checkin_date
       FROM public.profiles 
       WHERE id = ${id}::uuid 
       LIMIT 1

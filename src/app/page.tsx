@@ -21,7 +21,9 @@ import {
   Loader2, 
   Sparkles, 
   Utensils,
-  LayoutDashboard
+  LayoutDashboard,
+  TrendingUp, 
+  UploadCloud 
 } from 'lucide-react';
 
 // IMPORTANDO OS COMPONENTES DO ECOSSISTEMA SHAPE NATURAL
@@ -36,7 +38,7 @@ export default function Home() {
   const router = useRouter();
   
   // --- NAVEGAÇÃO DE ABAS ---
-  const [activeTab, setActiveTab] = useState<'dieta' | 'painel'>('dieta');
+  const [activeTab, setActiveTab] = useState<'dieta' | 'painel' | 'evolucao'>('dieta');
 
   // --- ESTADOS DE USUÁRIO E CARREGAMENTO ---
   const [user, setUser] = useState<any>(null);
@@ -59,10 +61,18 @@ export default function Home() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiFeedback, setAiFeedback] = useState<string | null>(null);
   const [activeMealForPhoto, setActiveMealForPhoto] = useState<any>(null);
+
+  // --- ESTADOS DO CHECK-IN (EVOLUÇÃO) ---
+  const [checkinWeight, setCheckinWeight] = useState('');
+  const [checkinPhotos, setCheckinPhotos] = useState<{frente: string | null, lado: string | null, costas: string | null}>({ frente: null, lado: null, costas: null });
+  const [isSubmittingCheckin, setIsSubmittingCheckin] = useState(false);
   
   // REFS PARA INPUTS DE ARQUIVO (GALERIA/CÂMERA)
   const fileInputRef = useRef<HTMLInputElement>(null);
   const profileInputRef = useRef<HTMLInputElement>(null);
+  const fileFrenteRef = useRef<HTMLInputElement>(null);
+  const fileLadoRef = useRef<HTMLInputElement>(null);
+  const fileCostasRef = useRef<HTMLInputElement>(null);
 
   const weekDays = [
       { idx: 0, label: 'Dom' }, 
@@ -283,7 +293,6 @@ export default function Home() {
     setAiFeedback(null);
     try {
       const expectedFood = activeMealForPhoto.items.map((i: any) => `${i.amount}${i.unit} de ${i.name}`);
-      // ROTA CORRIGIDA PARA A PASTA CORRETA DA IA
       const res = await fetch('/api/ai/analyze-meal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -302,8 +311,110 @@ export default function Home() {
     }
   };
 
+  // --- GESTÃO DE FOTOS CHECK-IN (EVOLUÇÃO) ---
+  const handleCheckinPhoto = (e: React.ChangeEvent<HTMLInputElement>, position: 'frente' | 'lado' | 'costas') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setCheckinPhotos(prev => ({ ...prev, [position]: reader.result as string }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const submitCheckin = async () => {
+    if (!checkinWeight || !checkinPhotos.frente || !checkinPhotos.lado || !checkinPhotos.costas) {
+       alert("Elite não fura check-in: Preencha o peso e adicione as 3 fotos!");
+       return;
+    }
+    setIsSubmittingCheckin(true);
+
+    try {
+      // 1. Função que transforma a foto do celular e atira pro Vercel Blob
+      const uploadPhoto = async (base64: string, position: string) => {
+         const res = await fetch(base64);
+         const blob = await res.blob();
+         const filename = `${user.id}-${position}-${Date.now()}.jpg`;
+
+         const uploadRes = await fetch(`/api/upload?filename=${filename}`, {
+             method: 'POST',
+             body: blob
+         });
+         
+         if (!uploadRes.ok) throw new Error("Falha ao subir foto");
+         const data = await uploadRes.json();
+         return data.url; // Retorna o Link Eterno do Vercel Blob
+      };
+
+      // 2. Sobe as 3 fotos ao mesmo tempo (muito mais rápido pro aluno)
+      const [urlFrente, urlLado, urlCostas] = await Promise.all([
+         uploadPhoto(checkinPhotos.frente, 'frente'),
+         uploadPhoto(checkinPhotos.lado, 'lado'),
+         uploadPhoto(checkinPhotos.costas, 'costas')
+      ]);
+
+      // 3. Salva no seu Banco de Dados
+      const dbRes = await fetch('/api/evolucao', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+            studentId: user.id,
+            peso: checkinWeight,
+            fotoFrente: urlFrente,
+            fotoLado: urlLado,
+            fotoCostas: urlCostas,
+            dataCheckin: new Date().toISOString().split('T')[0]
+         })
+      });
+
+      if (!dbRes.ok) throw new Error("Erro ao salvar avaliação no banco.");
+
+      alert("📸 Missão Cumprida! Check-in enviado para o Coach.");
+      
+      // Limpa a tela e joga pro painel
+      setCheckinWeight('');
+      setCheckinPhotos({ frente: null, lado: null, costas: null });
+      setActiveTab('painel'); 
+
+    } catch (error) {
+       console.error(error);
+       alert("Erro de conexão. Tente novamente.");
+    } finally {
+       setIsSubmittingCheckin(false);
+    }
+  };
+
   const activeProtocol = getActiveProtocol();
   const shoppingList = generateShoppingList();
+
+  // ==========================================
+  // LÓGICA DE ALERTA DO CHECK-IN (15/30 DIAS)
+  // ==========================================
+  const nextCheckinStr = studentData?.next_checkin_date;
+  let checkinStatus = 'none'; // 'none' | 'ok' | 'warning' | 'danger'
+  let daysToDiff = 0;
+  let formattedDate = '';
+
+  if (nextCheckinStr) {
+      // Pega a data atual da máquina do aluno e zera as horas (Início do dia local)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // Quebra a string "YYYY-MM-DD" que vem do banco para evitar conversão automática de fuso
+      const [year, month, day] = nextCheckinStr.split('T')[0].split('-');
+      const checkinDate = new Date(Number(year), Number(month) - 1, Number(day));
+      checkinDate.setHours(0, 0, 0, 0); // Garante início do dia
+      
+      formattedDate = checkinDate.toLocaleDateString('pt-BR');
+
+      const diffTime = checkinDate.getTime() - today.getTime();
+      // Usamos Math.round para evitar que 0.999 dias vire zero
+      daysToDiff = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+      if (daysToDiff > 5) checkinStatus = 'ok';
+      else if (daysToDiff > 0 && daysToDiff <= 5) checkinStatus = 'warning';
+      else checkinStatus = 'danger'; // Zero (Hoje) ou Negativo (Atrasado)
+  }
 
   // --- TELA DE CARREGAMENTO ---
   if (loading) {
@@ -323,10 +434,15 @@ export default function Home() {
       <input type="file" accept="image/*" capture="environment" ref={fileInputRef} className="hidden" onChange={handleImageCapture} />
       <input type="file" accept="image/*" ref={profileInputRef} className="hidden" onChange={handleProfileImageChange} />
 
+      {/* Inputs invisíveis do Check-in */}
+      <input type="file" accept="image/*" ref={fileFrenteRef} className="hidden" onChange={(e) => handleCheckinPhoto(e, 'frente')} />
+      <input type="file" accept="image/*" ref={fileLadoRef} className="hidden" onChange={(e) => handleCheckinPhoto(e, 'lado')} />
+      <input type="file" accept="image/*" ref={fileCostasRef} className="hidden" onChange={(e) => handleCheckinPhoto(e, 'costas')} />
+
       {/* Vacina para o Chat flutuar acima da Nav e não ficar escondido */}
-<div className="relative z-[120]">
-   <NutriChat studentName={user?.name || 'Atleta'} protocols={protocols} />
-</div>
+      <div className="relative z-[150]">
+         <NutriChat studentName={user?.name || 'Atleta'} protocols={protocols} />
+      </div>
 
       {/* 1. HEADER FIXO (TRAVADO NO TOPO DO VIDRO) */}
       <header className="fixed top-0 left-0 right-0 z-[100] bg-slate-900 text-white px-6 pt-[max(1.2rem,env(safe-area-inset-top))] pb-6 rounded-b-[45px] shadow-2xl border-b-4 border-green-600 overflow-hidden flex items-center justify-between">
@@ -359,7 +475,6 @@ export default function Home() {
           
           {/* CONTEÚDO: ABA DIETA */}
           <div className={`${activeTab === 'dieta' ? 'block' : 'hidden'} animate-in fade-in duration-300`}>
-             {/* --- SELETOR DE PROTOCOLO --- */}
              <div className="px-4 sm:px-6 mb-8">
                  <div className="flex items-center justify-between mb-4">
                      <div className="flex items-center gap-2 text-slate-400 px-2">
@@ -383,7 +498,6 @@ export default function Home() {
                  </div>
              </div>
 
-             {/* --- LISTAGEM DE REFEIÇÕES --- */}
              <div className="px-4 sm:px-6 space-y-8">
                 <div className="flex justify-between items-center px-2">
                     <h2 className="text-[10px] sm:text-xs font-black uppercase italic flex items-center gap-2 sm:gap-3 text-slate-400 tracking-[0.2em] sm:tracking-[0.3em] border-l-4 border-green-600 pl-3">
@@ -478,10 +592,9 @@ export default function Home() {
              </div>
           </div>
 
-          {/* CONTEÚDO: ABA PAINEL ELITE (Rotina, Mercado, Diário) */}
+          {/* CONTEÚDO: ABA PAINEL ELITE */}
           <div className={`${activeTab === 'painel' ? 'block' : 'hidden'} animate-in fade-in duration-300`}>
-              <div className="px-4 sm:px-6 space-y-4">
-                 
+             <div className="px-4 sm:px-6 space-y-4">
                  <WaterTracker studentId={user?.id} weight={studentData?.weight} />
                  
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -504,83 +617,186 @@ export default function Home() {
                  <div className="w-full">
                     <FreeMeal studentId={user?.id} />
                  </div>
-              </div>
+             </div>
+          </div>
+
+          {/* CONTEÚDO: ABA EVOLUÇÃO (CHECK-IN) */}
+          <div className={`${activeTab === 'evolucao' ? 'block' : 'hidden'} animate-in fade-in duration-300 px-4 sm:px-6 space-y-6`}>
+             
+             {/* HEADER DO CHECK-IN DINÂMICO */}
+             <div className={`p-6 rounded-[30px] shadow-xl relative overflow-hidden transform-gpu transition-colors duration-500 ${
+                 checkinStatus === 'danger' ? 'bg-red-600 text-white shadow-[0_10px_40px_rgba(220,38,38,0.4)] animate-[pulse_2s_ease-in-out_infinite]' : 
+                 checkinStatus === 'warning' ? 'bg-amber-400 text-slate-900 shadow-[0_10px_40px_rgba(251,191,36,0.3)]' : 
+                 'bg-slate-900 text-white shadow-[0_10px_40px_rgba(0,0,0,0.2)]'
+             }`}>
+                <div className={`absolute top-0 right-0 w-32 h-32 blur-[60px] opacity-20 translate-x-1/2 -translate-y-1/2 pointer-events-none ${
+                    checkinStatus === 'danger' ? 'bg-white' : checkinStatus === 'warning' ? 'bg-white' : 'bg-green-500'
+                }`}></div>
+
+                <div className="flex items-center gap-3 mb-2 relative z-10">
+                   <div className={`w-2 h-2 rounded-full animate-pulse ${checkinStatus === 'warning' ? 'bg-slate-900' : 'bg-white'}`}></div>
+                   <h3 className={`text-[10px] font-black uppercase tracking-[0.3em] ${checkinStatus === 'warning' ? 'text-slate-900' : checkinStatus === 'danger' ? 'text-white' : 'text-green-400'}`}>
+                      Status da Missão
+                   </h3>
+                </div>
+
+                <h2 className="text-2xl sm:text-3xl font-black uppercase italic leading-none relative z-10 pb-1">
+                   {checkinStatus === 'danger' ? (
+                       <>CHEGOU A<br/><span className="pr-2">HORA!</span></>
+                   ) : checkinStatus === 'warning' ? (
+                       <>FALTAM<br/><span className="pr-2">{daysToDiff} {daysToDiff === 1 ? 'DIA' : 'DIAS'}</span></>
+                   ) : checkinStatus === 'ok' ? (
+                       <>AVALIAÇÃO EM<br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-green-600 pr-2">{daysToDiff} DIAS</span></>
+                   ) : (
+                       <>DIA DE <br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-green-600 pr-2">AVALIAÇÃO</span></>
+                   )}
+                </h2>
+
+                <p className={`text-xs font-semibold mt-3 relative z-10 ${checkinStatus === 'warning' ? 'text-slate-800' : 'text-slate-300'}`}>
+                   {checkinStatus === 'danger' ? 'Coach aguardando. Envie suas fotos e peso agora.' : 
+                    checkinStatus === 'warning' ? `Prepare-se. Sua avaliação é dia ${formattedDate}.` :
+                    checkinStatus === 'ok' ? `Agendado para ${formattedDate}.` :
+                    'Registre suas métricas e fotos para avaliação.'}
+                </p>
+             </div>
+
+             <div className="bg-white p-6 rounded-[30px] border border-slate-100 shadow-sm flex flex-col items-center">
+                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4">Peso Atual (Em Jejum)</h4>
+                <div className="flex items-end gap-2">
+                   <input 
+                      type="number" 
+                      placeholder="00.0" 
+                      value={checkinWeight}
+                      onChange={(e) => setCheckinWeight(e.target.value)}
+                      className="w-32 text-center text-4xl font-black italic text-slate-900 bg-slate-50 border-2 border-slate-100 focus:border-green-500 rounded-2xl p-3 outline-none transition-all"
+                   />
+                   <span className="text-lg font-black text-slate-400 mb-3">KG</span>
+                </div>
+             </div>
+
+             <div className="bg-white p-6 rounded-[30px] border border-slate-100 shadow-sm">
+                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4 text-center">Registro Fotográfico</h4>
+                
+                <div className="grid grid-cols-3 gap-3">
+                   <div className="flex flex-col gap-2">
+                      <div onClick={() => fileFrenteRef.current?.click()} className="aspect-[3/4] bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center text-slate-400 hover:border-green-400 hover:text-green-500 transition-all cursor-pointer relative overflow-hidden group">
+                         {checkinPhotos.frente ? <img src={checkinPhotos.frente} alt="Frente" className="w-full h-full object-cover" /> : <><Camera size={24} className="mb-2 group-hover:scale-110 transition-transform" /><span className="text-[8px] font-black uppercase tracking-widest">Frente</span></>}
+                      </div>
+                   </div>
+
+                   <div className="flex flex-col gap-2">
+                      <div onClick={() => fileLadoRef.current?.click()} className="aspect-[3/4] bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center text-slate-400 hover:border-green-400 hover:text-green-500 transition-all cursor-pointer relative overflow-hidden group">
+                         {checkinPhotos.lado ? <img src={checkinPhotos.lado} alt="Lado" className="w-full h-full object-cover" /> : <><Camera size={24} className="mb-2 group-hover:scale-110 transition-transform" /><span className="text-[8px] font-black uppercase tracking-widest">Lado</span></>}
+                      </div>
+                   </div>
+
+                   <div className="flex flex-col gap-2">
+                      <div onClick={() => fileCostasRef.current?.click()} className="aspect-[3/4] bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center text-slate-400 hover:border-green-400 hover:text-green-500 transition-all cursor-pointer relative overflow-hidden group">
+                         {checkinPhotos.costas ? <img src={checkinPhotos.costas} alt="Costas" className="w-full h-full object-cover" /> : <><Camera size={24} className="mb-2 group-hover:scale-110 transition-transform" /><span className="text-[8px] font-black uppercase tracking-widest">Costas</span></>}
+                      </div>
+                   </div>
+                </div>
+             </div>
+
+             <button 
+                onClick={submitCheckin}
+                disabled={isSubmittingCheckin}
+                className="w-full bg-green-600 text-white p-6 rounded-[25px] font-black uppercase tracking-[0.2em] text-xs sm:text-sm shadow-[0_15px_30px_-10px_rgba(22,163,74,0.4)] hover:bg-green-700 transition-all active:scale-95 flex items-center justify-center gap-3 disabled:opacity-70"
+             >
+                {isSubmittingCheckin ? <><Loader2 className="animate-spin" size={20} /> ENVIANDO...</> : <><UploadCloud size={20} /> ENVIAR CHECK-IN</>}
+             </button>
           </div>
 
       </main>
 
-      {/* 3. NAVEGAÇÃO INFERIOR FIXA (ESTILO APP NATIVO) */}
+      {/* 3. NAVEGAÇÃO INFERIOR FIXA (ESTILO APP NATIVO COM 3 ABAS) */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-slate-200 p-2 pb-[max(1.2rem,env(safe-area-inset-bottom))] flex justify-center z-[110] shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
-         <div className="w-full max-w-md flex bg-slate-50 p-1.5 rounded-[22px] mx-4 border border-slate-100">
+         <div className="w-full max-w-md flex bg-slate-50 p-1.5 rounded-[22px] mx-4 border border-slate-100 gap-1">
             <button onClick={() => setActiveTab('dieta')}
                className={`flex-1 flex flex-col items-center justify-center p-3 rounded-[16px] transition-all
                   ${activeTab === 'dieta' ? 'bg-slate-900 text-green-400 shadow-md scale-[1.02]' : 'text-slate-400'}`}>
-               <Utensils size={20} className="mb-1" /><span className="text-[9px] font-black uppercase tracking-widest">Dieta</span>
+               <Utensils size={20} className="mb-1" /><span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest">Dieta</span>
             </button>
             <button onClick={() => setActiveTab('painel')}
                className={`flex-1 flex flex-col items-center justify-center p-3 rounded-[16px] transition-all
                   ${activeTab === 'painel' ? 'bg-slate-900 text-green-400 shadow-md scale-[1.02]' : 'text-slate-400'}`}>
-               <LayoutDashboard size={20} className="mb-1" /><span className="text-[9px] font-black uppercase tracking-widest">Painel Elite</span>
+               <LayoutDashboard size={20} className="mb-1" /><span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest">Painel</span>
+            </button>
+            <button onClick={() => setActiveTab('evolucao')}
+               className={`flex-1 flex flex-col items-center justify-center p-3 rounded-[16px] transition-all relative
+                  ${activeTab === 'evolucao' ? 'bg-slate-900 text-green-400 shadow-md scale-[1.02]' : 'text-slate-400'}`}>
+               
+               {/* BOLINHA VERMELHA DE ALERTA SE O DIA DO CHECK-IN CHEGOU OU PASSOU */}
+               {checkinStatus === 'danger' && (
+                  <span className="absolute top-2 right-6 sm:right-8 w-2.5 h-2.5 bg-red-500 border-2 border-slate-50 rounded-full animate-ping"></span>
+               )}
+               {checkinStatus === 'danger' && (
+                  <span className="absolute top-2 right-6 sm:right-8 w-2.5 h-2.5 bg-red-500 border-2 border-slate-50 rounded-full"></span>
+               )}
+
+               <TrendingUp size={20} className="mb-1" /><span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest">Evolução</span>
             </button>
          </div>
       </nav>
 
       {/* --- MODAL DA LISTA DE COMPRAS --- */}
       {isShoppingListOpen && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-6">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6">
           <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md" onClick={() => setIsShoppingListOpen(false)} />
           
-          <div className="bg-white w-full h-[95dvh] sm:h-[85vh] max-w-2xl rounded-t-[40px] sm:rounded-[50px] flex flex-col relative z-10 animate-in slide-in-from-bottom duration-500 shadow-2xl overflow-hidden pb-[env(safe-area-inset-bottom,0px)]">
-            <div className="bg-slate-900 border-b-4 border-green-600 p-6 sm:p-8 pt-[max(1.5rem,env(safe-area-inset-top))] text-white relative shrink-0">
+          <div className="bg-white w-full max-w-2xl max-h-[85dvh] rounded-[35px] sm:rounded-[40px] flex flex-col relative z-10 animate-in zoom-in-95 duration-300 shadow-2xl overflow-hidden">
+            <div className="bg-slate-900 border-b-4 border-green-600 p-6 sm:p-8 text-white relative shrink-0">
                <button 
                  onClick={() => setIsShoppingListOpen(false)} 
-                 className="absolute top-4 sm:top-8 right-4 sm:right-8 bg-white/10 hover:bg-white/20 p-2 sm:p-3 rounded-full transition-colors text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
+                 className="absolute top-4 sm:top-6 right-4 sm:right-6 bg-white/10 hover:bg-white/20 p-2 sm:p-3 rounded-full transition-colors text-white min-w-[44px] min-h-[44px] flex items-center justify-center z-20"
                >
-                 <X size={20} className="sm:w-[24px] sm:h-[24px]" />
+                 <X size={20} />
                </button>
                
-               <div className="flex justify-between items-end mb-4 sm:mb-6 pr-14">
-                  <div className="w-14 h-14 sm:w-16 sm:h-16 bg-white/10 rounded-[20px] sm:rounded-3xl flex items-center justify-center backdrop-blur-md border border-white/5">
-                     <ShoppingCart size={28} className="sm:w-[32px] sm:h-[32px] text-green-400" />
+               <div className="flex justify-between items-center mb-4 sm:mb-6 pr-12 relative z-10">
+                  <div className="w-14 h-14 bg-white/10 rounded-[20px] flex items-center justify-center backdrop-blur-md border border-white/5 shrink-0">
+                     <ShoppingCart size={28} className="text-green-400" />
                   </div>
-                  <ShoppingPDFGenerator studentName={user?.name || 'Aluno'} shoppingList={shoppingList} />
+                  <div className="shrink-0">
+                    <ShoppingPDFGenerator studentName={user?.name || 'Aluno'} shoppingList={shoppingList} />
+                  </div>
                </div>
                
-               <h3 className="text-2xl sm:text-3xl font-black uppercase italic leading-none mb-1 sm:mb-2 tracking-tighter">Minha Despensa</h3>
-               <p className="text-[9px] sm:text-[11px] font-bold uppercase opacity-80 tracking-widest text-green-400">Calculado de todos os seus protocolos</p>
+               <h3 className="text-2xl sm:text-3xl font-black uppercase italic leading-none mb-1 tracking-tighter truncate">Minha Despensa</h3>
+               <p className="text-[9px] font-bold uppercase opacity-80 tracking-widest text-green-400 truncate">Calculado de todos os protocolos</p>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-5 sm:p-8 bg-slate-50 space-y-6 sm:space-y-8 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-5 sm:p-8 bg-slate-50 space-y-6 custom-scrollbar">
                {Object.keys(shoppingList).length === 0 ? (
-                   <div className="text-center py-20 sm:py-32 opacity-40">
-                       <ShoppingCart size={48} className="sm:w-[60px] sm:h-[60px] mx-auto mb-4 sm:mb-6" />
-                       <p className="font-black uppercase text-xs sm:text-sm tracking-[0.2em]">Sua lista está vazia</p>
+                   <div className="text-center py-20 opacity-40">
+                       <ShoppingCart size={48} className="mx-auto mb-4" />
+                       <p className="font-black uppercase text-xs tracking-[0.2em]">Sua lista está vazia</p>
                    </div>
                ) : (
                    Object.keys(shoppingList).map((category, cIdx) => (
-                       <div key={cIdx} className="bg-white rounded-[25px] sm:rounded-[35px] border border-slate-200 p-5 sm:p-7 shadow-sm">
-                           <h4 className="text-[10px] sm:text-[12px] font-black uppercase tracking-[0.2em] sm:tracking-[0.3em] text-slate-900 mb-4 sm:mb-6 border-b border-slate-100 pb-2 sm:pb-3 flex items-center gap-2 sm:gap-3">
-                               <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full animate-pulse"></div>
+                       <div key={cIdx} className="bg-white rounded-[25px] border border-slate-200 p-5 shadow-sm">
+                           <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900 mb-4 border-b border-slate-100 pb-2 flex items-center gap-2 truncate">
+                               <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse shrink-0"></div>
                                {category}
                            </h4>
-                           <div className="grid grid-cols-1 gap-3 sm:gap-4">
+                           <div className="grid grid-cols-1 gap-3">
                                {shoppingList[category].map((item: any, iIdx: number) => {
                                    const isChecked = checkedShoppingItems.includes(item.name);
                                    return (
                                        <button 
                                           key={iIdx} 
                                           onClick={() => toggleShoppingItem(item.name)} 
-                                          className={`w-full flex justify-between items-center p-3 sm:p-4 rounded-2xl sm:rounded-3xl border transition-all min-h-[44px] ${isChecked ? 'bg-slate-50 border-transparent opacity-50 grayscale' : 'bg-white border-slate-100 hover:border-green-400'}`}
+                                          className={`w-full flex justify-between items-center p-3 rounded-2xl border transition-all min-h-[44px] ${isChecked ? 'bg-slate-50 border-transparent opacity-50 grayscale' : 'bg-white border-slate-100 hover:border-green-400'}`}
                                        >
-                                          <div className="flex items-center gap-3 sm:gap-4 text-left overflow-hidden">
-                                              {isChecked ? <CheckSquare size={20} className="sm:w-[22px] sm:h-[22px] text-green-500 shrink-0" /> : <Square size={20} className="sm:w-[22px] sm:h-[22px] text-slate-300 shrink-0" />}
-                                              <span className={`text-sm sm:text-base font-bold uppercase italic transition-all truncate ${isChecked ? 'line-through text-slate-400' : 'text-slate-800'}`}>
+                                          <div className="flex items-center gap-3 text-left overflow-hidden">
+                                              {isChecked ? <CheckSquare size={20} className="text-green-500 shrink-0" /> : <Square size={20} className="text-slate-300 shrink-0" />}
+                                              <span className={`text-sm font-bold uppercase italic truncate ${isChecked ? 'line-through text-slate-400' : 'text-slate-800'}`}>
                                                   {item.name}
                                               </span>
                                           </div>
-                                          <div className="bg-slate-100 px-3 py-1.5 sm:px-4 sm:py-2 rounded-[12px] sm:rounded-2xl shrink-0 text-right shadow-inner ml-2">
-                                              <span className="font-black text-base sm:text-lg text-slate-900 leading-none">{item.amount}</span>
-                                              <span className="text-[9px] sm:text-[10px] font-black uppercase ml-1 sm:ml-1.5 text-green-600">{item.unit}</span>
+                                          <div className="bg-slate-100 px-3 py-1.5 rounded-[12px] shrink-0 text-right shadow-inner ml-2">
+                                              <span className="font-black text-base text-slate-900 leading-none">{item.amount}</span>
+                                              <span className="text-[9px] font-black uppercase ml-1 text-green-600">{item.unit}</span>
                                           </div>
                                        </button>
                                    );
@@ -591,10 +807,10 @@ export default function Home() {
                )}
             </div>
 
-            <div className="p-5 sm:p-8 bg-white border-t border-slate-100 shrink-0 pb-[max(env(safe-area-inset-bottom,20px),20px)]">
+            <div className="p-5 bg-white border-t border-slate-100 shrink-0">
                <button 
                  onClick={() => setIsShoppingListOpen(false)} 
-                 className="w-full bg-slate-900 text-white p-5 sm:p-6 rounded-[25px] sm:rounded-[30px] font-black uppercase text-sm sm:text-base tracking-[0.2em] hover:bg-green-600 transition-all shadow-xl active:scale-95 flex justify-center items-center gap-3 min-h-[56px]"
+                 className="w-full bg-slate-900 text-white p-5 rounded-[25px] font-black uppercase text-sm tracking-[0.2em] hover:bg-green-600 transition-all shadow-xl active:scale-95 flex justify-center items-center gap-2 min-h-[56px]"
                >
                  Concluir Compra
                </button>
@@ -605,7 +821,7 @@ export default function Home() {
 
       {/* --- MODAL DA IA --- */}
       {isAiModalOpen && photoPreview && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 sm:p-6">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6">
           <div className="absolute inset-0 bg-slate-900/95 backdrop-blur-xl" onClick={() => !isAnalyzing && setIsAiModalOpen(false)} />
           
           <div className="bg-white w-full max-w-lg rounded-[40px] sm:rounded-[50px] overflow-hidden relative z-10 shadow-[0_0_100px_rgba(22,163,74,0.2)] animate-in zoom-in-95 duration-500 flex flex-col max-h-[90dvh]">
@@ -666,7 +882,7 @@ export default function Home() {
 
       {/* --- MODAL DE SUBSTITUIÇÃO --- */}
       {isModalOpen && selectedItem && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-6">
+        <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center sm:p-6">
           <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md" onClick={() => setIsModalOpen(false)} />
           
           <div className="bg-white w-full max-w-lg rounded-t-[40px] sm:rounded-[50px] overflow-hidden relative z-10 animate-in slide-in-from-bottom duration-500 shadow-2xl pb-[env(safe-area-inset-bottom,0px)] max-h-[85dvh] flex flex-col">
@@ -711,6 +927,19 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* --- ESTILOS GLOBAIS --- */}
+      <style jsx global>{`
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        #nutrichat-trigger, 
+        .fixed.bottom-4.right-4,
+        button.fixed.bottom-6.right-6 {
+          bottom: 110px !important;
+          z-index: 160 !important;
+        }
+      `}</style>
     </div>
   );
 }
