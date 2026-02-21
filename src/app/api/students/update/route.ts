@@ -4,21 +4,24 @@ import { NextResponse } from "next/server";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { id, weight, height } = body;
-
-    // Convertemos para números para garantir que o banco aceite
-    const numWeight = parseFloat(weight);
-    const numHeight = parseFloat(height);
+    // 1. ADICIONADO: Extraímos o phone do corpo da requisição
+    const { id, weight, height, phone } = body;
 
     if (!id) {
       return NextResponse.json({ error: "ID não fornecido" }, { status: 400 });
     }
 
+    // Convertemos para números ou null caso estejam vazios
+    const numWeight = weight ? parseFloat(weight) : null;
+    const numHeight = height ? parseFloat(height) : null;
+
+    // 2. ATUALIZADO: O SQL agora contempla o campo phone
     await sql`
       UPDATE public.profiles 
       SET 
         weight = ${numWeight}, 
-        height = ${numHeight}
+        height = ${numHeight},
+        phone = ${phone || null} -- Se o phone for vazio, salva null para não dar erro
       WHERE id = ${id}::uuid
     `;
 

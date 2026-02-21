@@ -330,48 +330,56 @@ export default function Home() {
     setIsSubmittingCheckin(true);
 
     try {
-      // 1. Função que transforma a foto do celular e atira pro Vercel Blob
+      // 1. Função de upload para o Vercel Blob
       const uploadPhoto = async (base64: string, position: string) => {
          const res = await fetch(base64);
          const blob = await res.blob();
          const filename = `${user.id}-${position}-${Date.now()}.jpg`;
-
          const uploadRes = await fetch(`/api/upload?filename=${filename}`, {
              method: 'POST',
              body: blob
          });
-         
          if (!uploadRes.ok) throw new Error("Falha ao subir foto");
          const data = await uploadRes.json();
-         return data.url; // Retorna o Link Eterno do Vercel Blob
+         return data.url;
       };
 
-      // 2. Sobe as 3 fotos ao mesmo tempo (muito mais rápido pro aluno)
+      // 2. Sobe as 3 fotos
       const [urlFrente, urlLado, urlCostas] = await Promise.all([
-         uploadPhoto(checkinPhotos.frente, 'frente'),
-         uploadPhoto(checkinPhotos.lado, 'lado'),
-         uploadPhoto(checkinPhotos.costas, 'costas')
+          uploadPhoto(checkinPhotos.frente, 'frente'),
+          uploadPhoto(checkinPhotos.lado, 'lado'),
+          uploadPhoto(checkinPhotos.costas, 'costas')
       ]);
 
-      // 3. Salva no seu Banco de Dados
+      // 3. Salva no Banco de Dados
       const dbRes = await fetch('/api/evolucao', {
-         method: 'POST',
-         headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
             studentId: user.id,
             peso: checkinWeight,
             fotoFrente: urlFrente,
             fotoLado: urlLado,
             fotoCostas: urlCostas,
             dataCheckin: new Date().toISOString().split('T')[0]
-         })
+          })
       });
 
       if (!dbRes.ok) throw new Error("Erro ao salvar avaliação no banco.");
 
       alert("📸 Missão Cumprida! Check-in enviado para o Coach.");
       
-      // Limpa a tela e joga pro painel
+      // ==========================================
+      // A CIRURGIA ESTÁ AQUI: ATUALIZAÇÃO IMEDIATA
+      // ==========================================
+      // Busca os dados do perfil novamente para zerar o cronômetro (next_checkin_date agora é NULL)
+      const refreshProfile = await fetch(`/api/students/details?id=${user.id}`);
+      if (refreshProfile.ok) {
+          const updatedData = await refreshProfile.json();
+          setStudentData(updatedData); // Isso apaga o banner amarelo/vermelho na hora!
+      }
+      
+      // Limpa os campos e volta para o painel
       setCheckinWeight('');
       setCheckinPhotos({ frente: null, lado: null, costas: null });
       setActiveTab('painel'); 
@@ -641,23 +649,25 @@ export default function Home() {
                 </div>
 
                 <h2 className="text-2xl sm:text-3xl font-black uppercase italic leading-none relative z-10 pb-1">
-                   {checkinStatus === 'danger' ? (
-                       <>CHEGOU A<br/><span className="pr-2">HORA!</span></>
-                   ) : checkinStatus === 'warning' ? (
-                       <>FALTAM<br/><span className="pr-2">{daysToDiff} {daysToDiff === 1 ? 'DIA' : 'DIAS'}</span></>
-                   ) : checkinStatus === 'ok' ? (
-                       <>AVALIAÇÃO EM<br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-green-600 pr-2">{daysToDiff} DIAS</span></>
-                   ) : (
-                       <>DIA DE <br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-green-600 pr-2">AVALIAÇÃO</span></>
-                   )}
-                </h2>
+   {checkinStatus === 'danger' ? (
+       <>CHEGOU A<br/><span className="pr-2">HORA!</span></>
+   ) : checkinStatus === 'warning' ? (
+       <>FALTAM<br/><span className="pr-2">{daysToDiff} {daysToDiff === 1 ? 'DIA' : 'DIAS'}</span></>
+   ) : checkinStatus === 'ok' ? (
+       <>AVALIAÇÃO EM<br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-green-600 pr-2">{daysToDiff} DIAS</span></>
+   ) : (
+       /* TEXTO QUANDO NÃO HÁ DATA DEFINIDA */
+       <>AGUARDE A<br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-green-600 pr-2">DEFINIÇÃO</span></>
+   )}
+</h2>
 
                 <p className={`text-xs font-semibold mt-3 relative z-10 ${checkinStatus === 'warning' ? 'text-slate-800' : 'text-slate-300'}`}>
-                   {checkinStatus === 'danger' ? 'Coach aguardando. Envie suas fotos e peso agora.' : 
-                    checkinStatus === 'warning' ? `Prepare-se. Sua avaliação é dia ${formattedDate}.` :
-                    checkinStatus === 'ok' ? `Agendado para ${formattedDate}.` :
-                    'Registre suas métricas e fotos para avaliação.'}
-                </p>
+   {checkinStatus === 'danger' ? 'Coach aguardando. Envie suas fotos e peso agora.' : 
+    checkinStatus === 'warning' ? `Prepare-se. Sua avaliação é dia ${formattedDate}.` :
+    checkinStatus === 'ok' ? `Agendado para ${formattedDate}.` :
+    /* FRASE PERSONALIZADA AQUI */
+    'Aguarde o Paulo definir a sua próxima data de avaliação.'}
+</p>
              </div>
 
              <div className="bg-white p-6 rounded-[30px] border border-slate-100 shadow-sm flex flex-col items-center">
@@ -762,7 +772,7 @@ export default function Home() {
                   </div>
                </div>
                
-               <h3 className="text-2xl sm:text-3xl font-black uppercase italic leading-none mb-1 tracking-tighter truncate">Minha Despensa</h3>
+               <h3 className="text-2xl sm:text-3xl font-black uppercase italic leading-none mb-1 tracking-tighter truncate">Minha lista de compras</h3>
                <p className="text-[9px] font-bold uppercase opacity-80 tracking-widest text-green-400 truncate">Calculado de todos os protocolos</p>
             </div>
 

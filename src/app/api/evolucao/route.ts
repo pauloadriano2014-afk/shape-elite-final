@@ -5,7 +5,7 @@ export async function POST(req: Request) {
   try {
     const { studentId, peso, fotoFrente, fotoLado, fotoCostas, dataCheckin } = await req.json();
 
-    // 1. GARANTIA DE TABELA: Se a tabela não existir no seu Neon, ele cria na hora!
+    // 1. GARANTIA DE TABELA: Mantém a estrutura de histórico
     await sql`
       CREATE TABLE IF NOT EXISTS evolucao (
         id SERIAL PRIMARY KEY,
@@ -19,23 +19,29 @@ export async function POST(req: Request) {
       );
     `;
 
-    // 2. INSERÇÃO DOS DADOS: Salvando o peso e os links das fotos em alta qualidade
+    // 2. INSERÇÃO DOS DADOS: Cria um novo registro (Histórico preservado)
     await sql`
       INSERT INTO evolucao (student_id, peso, foto_frente, foto_lado, foto_costas, data_checkin)
       VALUES (${studentId}, ${peso}, ${fotoFrente}, ${fotoLado}, ${fotoCostas}, ${dataCheckin});
     `;
 
-    console.log(`✅ Check-in salvo com sucesso para o aluno ID: ${studentId}`);
+    // 3. LIMPEZA DA AGENDA: Remove a data de exigência na tabela profiles
+    // Isso faz o alerta vermelho/verde sumir da tela do aluno após o envio
+    await sql`
+      UPDATE profiles 
+      SET next_checkin_date = NULL 
+      WHERE id = ${studentId}::uuid;
+    `;
 
-    return NextResponse.json({ success: true, message: "Avaliação salva com sucesso!" });
+    console.log(`✅ Check-in realizado e alerta limpo para o aluno: ${studentId}`);
+
+    return NextResponse.json({ success: true, message: "Avaliação salva com sucesso e alerta removido!" });
     
   } catch (error) {
-    console.error("🚨 Erro ao salvar evolução no Neon DB:", error);
+    console.error("🚨 Erro na rota de evolução (POST):", error);
     return NextResponse.json({ error: "Erro interno no servidor" }, { status: 500 });
   }
 }
-
-// --- ADICIONE ISSO NO FINAL DO ARQUIVO route.ts ---
 
 export async function GET(req: Request) {
   try {
@@ -46,21 +52,18 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "ID do aluno não fornecido" }, { status: 400 });
     }
 
-    // Puxa a última avaliação cadastrada desse aluno no Neon DB
+    // 4. HISTÓRICO COMPLETO: Puxa todos os check-ins do aluno (do mais novo para o mais antigo)
     const result = await sql`
       SELECT * FROM evolucao 
       WHERE student_id = ${studentId} 
-      ORDER BY data_checkin DESC, created_at DESC 
-      LIMIT 1
+      ORDER BY data_checkin DESC, created_at DESC
     `;
 
-    if (result.length > 0) {
-      return NextResponse.json(result[0]);
-    } else {
-      return NextResponse.json(null); // Retorna null se não tiver avaliação
-    }
+    // Retorna a lista completa para o Coach ver a evolução temporal
+    return NextResponse.json(result);
+    
   } catch (error) {
-    console.error("🚨 Erro ao buscar evolução no Neon DB:", error);
+    console.error("🚨 Erro na rota de evolução (GET):", error);
     return NextResponse.json({ error: "Erro interno no servidor" }, { status: 500 });
   }
 }

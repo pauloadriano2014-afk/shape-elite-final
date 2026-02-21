@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image'; // IMPORTANTE: O Image do Next
 import { 
   Users, Plus, Target, Search, Edit2, LogOut, 
-  Droplets, Zap, Flame, User as UserIcon, Activity, TrendingUp, Copy
+  Droplets, Zap, Flame, User as UserIcon, Activity, TrendingUp, Copy,
+  MessageCircle // <--- ADICIONE ESTE AQUI
 } from 'lucide-react';
 
 export default function DashboardCoachPage() {
@@ -220,12 +221,27 @@ export default function DashboardCoachPage() {
                      </div>
                    </div>
 
-                   <button 
-                     onClick={() => router.push(`/dashboard-coach/aluno/${student.id}`)} 
-                     className="bg-slate-900 text-white p-4 sm:p-5 rounded-[16px] sm:rounded-[20px] hover:bg-green-600 transition-all shadow-lg active:scale-90 shrink-0 flex items-center justify-center"
-                   >
-                     <Edit2 size={20} className="sm:w-[24px] sm:h-[24px]" />
-                   </button>
+                   <div className="flex gap-2"> {/* Agrupador para os botões ficarem lado a lado */}
+  
+  {/* BOTÃO WHATSAPP - SEGURO CONTRA ERROS */}
+{student.phone && (
+  <a 
+    href={`https://wa.me/55${(student.phone || '').replace(/\D/g, '')}`}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="bg-green-500 text-white p-4 sm:p-5 rounded-[16px] sm:rounded-[20px] hover:bg-green-600 transition-all shadow-lg active:scale-90 shrink-0 flex items-center justify-center"
+  >
+    <MessageCircle size={20} className="sm:w-[24px] sm:h-[24px]" />
+  </a>
+)}
+
+  <button 
+    onClick={() => router.push(`/dashboard-coach/aluno/${student.id}`)} 
+    className="bg-slate-900 text-white p-4 sm:p-5 rounded-[16px] sm:rounded-[20px] hover:bg-green-600 transition-all shadow-lg active:scale-90 shrink-0 flex items-center justify-center"
+  >
+    <Edit2 size={20} className="sm:w-[24px] sm:h-[24px]" />
+  </button>
+</div>
                 </div>
 
               </div>

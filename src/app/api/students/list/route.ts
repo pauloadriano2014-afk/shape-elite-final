@@ -5,13 +5,14 @@ export async function GET() {
   try {
     const sql = neon(process.env.DATABASE_URL!);
     
-    // Busca da tabela exata (profiles) e cruza com a tabela (checkins) do dia
+    // Agora incluindo u.phone na busca
     const students = await sql`
       SELECT 
         u.id, 
         u.full_name, 
         u.goal, 
         u.weight, 
+        u.phone, -- A COLUNA MÁGICA ADICIONADA AQUI
         u."photoUrl", 
         u."photoPosition",
         c.water_ml as today_water,

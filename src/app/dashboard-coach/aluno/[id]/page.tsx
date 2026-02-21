@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { 
   ChevronLeft, Scale, Ruler, Target, BrainCircuit, Save, History, 
   Edit3, ArrowRight, User as UserIcon, Loader2, Maximize2, 
-  Clock, Ban, Pill, Utensils, Zap, Activity, Droplets, Flame, FileText, MessageCircle, Camera, CalendarDays, CheckCircle
+  Clock, Ban, Pill, Utensils, Zap, Activity, Droplets, Flame, FileText, MessageCircle, Camera, CalendarDays, CheckCircle, Phone
 } from 'lucide-react';
 
 export default function PerfilAlunoPage({ params }: { params: Promise<{ id: string }> }) {
@@ -14,10 +14,11 @@ export default function PerfilAlunoPage({ params }: { params: Promise<{ id: stri
   
   const [student, setStudent] = useState<any>(null);
   const [checkin, setCheckin] = useState<any>(null);
-  const [evolucao, setEvolucao] = useState<any>(null); // NOVO ESTADO DAS FOTOS
+  const [evolucao, setEvolucao] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
-  const [measures, setMeasures] = useState({ weight: '', height: '' });
+  
+  const [measures, setMeasures] = useState({ weight: '', height: '', phone: '' });
   const [saving, setSaving] = useState(false);
   
   const [activeTab, setActiveTab] = useState<'dossie' | 'prescricao' | 'evolucao'>('dossie');
@@ -31,7 +32,8 @@ export default function PerfilAlunoPage({ params }: { params: Promise<{ id: stri
           setStudent(data);
           setMeasures({ 
             weight: data.weight ? String(data.weight) : '', 
-            height: data.height ? String(data.height) : '' 
+            height: data.height ? String(data.height) : '',
+            phone: data.phone ? String(data.phone) : ''
           });
         }
 
@@ -42,7 +44,6 @@ export default function PerfilAlunoPage({ params }: { params: Promise<{ id: stri
           setCheckin(cData);
         }
 
-        // NOVO: Busca as fotos e peso do Check-in
         const evoRes = await fetch(`/api/evolucao?studentId=${id}`);
         if (evoRes.ok) {
           const eData = await evoRes.json();
@@ -57,6 +58,28 @@ export default function PerfilAlunoPage({ params }: { params: Promise<{ id: stri
     }
     loadData();
   }, [id]);
+
+  // 📸 UPLOAD DE FOTO PELO COACH
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64String = reader.result as string;
+      setStudent((prev: any) => ({ ...prev, photoUrl: base64String }));
+      try {
+        await fetch('/api/students/update-photo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentId: id, photoUrl: base64String })
+        });
+      } catch (error) {
+        console.error("Erro ao subir foto", error);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const togglePhotoPosition = async () => {
     if (!student) return;
@@ -77,10 +100,20 @@ export default function PerfilAlunoPage({ params }: { params: Promise<{ id: stri
       const res = await fetch('/api/students/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, weight: measures.weight, height: measures.height })
+        body: JSON.stringify({ 
+          id, 
+          weight: measures.weight, 
+          height: measures.height,
+          phone: measures.phone 
+        })
       });
       if (res.ok) {
-        setStudent((prev: any) => ({ ...prev, weight: measures.weight, height: measures.height }));
+        setStudent((prev: any) => ({ 
+          ...prev, 
+          weight: measures.weight, 
+          height: measures.height,
+          phone: measures.phone
+        }));
         setEditMode(false);
       }
     } catch (err) { console.error(err); } finally { setSaving(false); }
@@ -100,11 +133,41 @@ export default function PerfilAlunoPage({ params }: { params: Promise<{ id: stri
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ studentId: id, date: dateToSave })
       });
-      // Atualiza a tela na hora para o Coach
       setStudent((prev: any) => ({ ...prev, next_checkin_date: dateToSave }));
       alert(`✅ Avaliação agendada com sucesso!`);
     } catch (err) {
       console.error("Erro ao agendar", err);
+    }
+  };
+
+  // 🚨 FUNÇÕES DA ZONA DE PERIGO 🚨
+  const handleDelete = async () => {
+    if (confirm("🚨 ATENÇÃO: Isso vai apagar TODAS as dietas, fotos e dados desse aluno para sempre. Tem certeza absoluta?")) {
+      try {
+        setLoading(true);
+        const res = await fetch(`/api/students/delete?id=${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          alert("Aluno aniquilado com sucesso!");
+          router.push('/dashboard-coach'); 
+        } else alert("Erro ao excluir.");
+      } catch (err) { alert("Erro de conexão."); } finally { setLoading(false); }
+    }
+  };
+
+  const handleInativar = async () => {
+    if (confirm("Bloquear acesso deste aluno? Ele sumirá do seu painel e não poderá entrar no app.")) {
+      try {
+        setLoading(true);
+        const res = await fetch(`/api/students/inativar`, { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ id }) 
+        });
+        if (res.ok) {
+          alert("Aluno inativado e bloqueado!");
+          router.push('/dashboard-coach');
+        } else alert("Erro ao inativar.");
+      } catch (err) { alert("Erro de conexão."); } finally { setLoading(false); }
     }
   };
 
@@ -145,17 +208,26 @@ export default function PerfilAlunoPage({ params }: { params: Promise<{ id: stri
           
           <div className="flex flex-col items-center relative z-10">
             <div className="relative group mb-5 sm:mb-6">
-                <div className="w-28 h-28 sm:w-32 sm:h-32 bg-slate-800 rounded-[35px] sm:rounded-[40px] border-2 border-slate-700 flex items-center justify-center overflow-hidden shadow-2xl relative">
+                <div className="w-28 h-28 sm:w-32 sm:h-32 bg-slate-800 rounded-[35px] sm:rounded-[40px] border-2 border-slate-700 flex items-center justify-center overflow-hidden shadow-2xl relative group">
                   {student?.photoUrl ? (
                       <img src={student.photoUrl} className={`w-full h-full object-cover ${student.photoPosition === 'top' ? 'object-top' : 'object-center'}`} />
                   ) : (
                       <UserIcon size={48} className="text-slate-600" />
                   )}
-                  <div className="absolute inset-0 border-4 border-green-500 rounded-[35px] sm:rounded-[40px] pointer-events-none"></div>
+                  <div className="absolute inset-0 border-4 border-green-500 rounded-[35px] sm:rounded-[40px] pointer-events-none z-10"></div>
+                  
+                  {/* OVERLAY DE UPLOAD DO COACH (Aparece no hover) */}
+                  <label className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-20">
+                      <Camera size={24} className="text-white mb-1" />
+                      <span className="text-[8px] font-black text-white uppercase tracking-widest text-center px-2 leading-tight">Mudar<br/>Foto</span>
+                      <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
+                  </label>
                 </div>
+                
+                {/* BOTÃO DE AJUSTAR POSIÇÃO DA FOTO */}
                 <button 
                   onClick={togglePhotoPosition} 
-                  className="absolute -bottom-2 -right-2 bg-green-600 text-white p-2.5 sm:p-3 rounded-[16px] sm:rounded-2xl shadow-[0_5px_15px_rgba(22,163,74,0.4)] hover:scale-110 active:scale-95 transition-all border-2 border-slate-900"
+                  className="absolute -bottom-2 -right-2 bg-green-600 text-white p-2.5 sm:p-3 rounded-[16px] sm:rounded-[20px] shadow-[0_5px_15px_rgba(22,163,74,0.4)] hover:scale-110 active:scale-95 transition-all border-2 border-slate-900 z-30"
                 >
                   <Maximize2 size={16} />
                 </button>
@@ -165,7 +237,7 @@ export default function PerfilAlunoPage({ params }: { params: Promise<{ id: stri
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black uppercase italic tracking-tighter leading-none mb-4 max-w-full truncate px-2">{student?.full_name}</h2>
             
             <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
-              <div className="flex items-center gap-2 sm:gap-3 bg-white/10 px-4 sm:px-6 py-2 sm:py-2.5 rounded-[16px] sm:rounded-2xl text-[10px] sm:text-[11px] font-black uppercase italic border border-white/5 backdrop-blur-sm">
+              <div className="flex items-center gap-2 sm:gap-3 bg-white/10 px-4 sm:px-6 py-2 sm:py-2.5 rounded-[16px] sm:rounded-[20px] text-[10px] sm:text-[11px] font-black uppercase italic border border-white/5 backdrop-blur-sm">
                 <Target size={14} className="text-green-400" /> 
                 {student?.goal || 'Não informado'}
               </div>
@@ -175,7 +247,7 @@ export default function PerfilAlunoPage({ params }: { params: Promise<{ id: stri
                   href={`https://wa.me/55${student.phone.replace(/\D/g, '')}`} 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="flex items-center gap-2 bg-green-500 text-white px-4 sm:px-6 py-2 sm:py-2.5 rounded-[16px] sm:rounded-2xl text-[10px] sm:text-[11px] font-black uppercase italic shadow-[0_5px_15px_rgba(22,163,74,0.3)] hover:scale-105 active:scale-95 transition-all"
+                  className="flex items-center gap-2 bg-green-500 text-white px-4 sm:px-6 py-2 sm:py-2.5 rounded-[16px] sm:rounded-[20px] text-[10px] sm:text-[11px] font-black uppercase italic shadow-[0_5px_15px_rgba(22,163,74,0.3)] hover:scale-105 active:scale-95 transition-all"
                 >
                   <MessageCircle size={14} /> Chamar no App
                 </a>
@@ -184,7 +256,7 @@ export default function PerfilAlunoPage({ params }: { params: Promise<{ id: stri
           </div>
         </div>
 
-        {/* --- NAVEGAÇÃO DE ABAS (PÍLULA COM 3 OPÇÕES AGORA) --- */}
+        {/* --- NAVEGAÇÃO DE ABAS --- */}
         <div className="flex bg-slate-200/60 p-1.5 rounded-[20px] max-w-2xl mx-auto relative z-20 gap-1 overflow-x-auto no-scrollbar">
             <button 
                 onClick={() => setActiveTab('dossie')} 
@@ -210,9 +282,7 @@ export default function PerfilAlunoPage({ params }: { params: Promise<{ id: stri
             ABA 3: CHECK-IN / EVOLUÇÃO DAS FOTOS
         ========================================= */}
         {activeTab === 'evolucao' && (
-            <div className="space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12 sm:pb-20">
-               
-               {/* NOVO: CONTROLE DE AGENDAMENTO DO COACH */}
+            <div className="space-y-6 sm:space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12 sm:pb-20">
                <div className="bg-white p-5 sm:p-6 rounded-[25px] sm:rounded-[30px] border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                   <div>
                     <h4 className="font-black uppercase tracking-widest text-slate-800 flex items-center gap-2 text-sm">
@@ -221,10 +291,9 @@ export default function PerfilAlunoPage({ params }: { params: Promise<{ id: stri
                     <p className="text-[10px] sm:text-xs text-slate-400 font-bold mt-1 uppercase tracking-widest">
                        {student?.next_checkin_date 
                           ? `Agendado para: ${new Date(student.next_checkin_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}` 
-                          : 'Nenhuma data exigida'}
+                          : 'Check-in realizado / Aguardando nova data'}
                     </p>
                   </div>
-                  
                   <div className="flex flex-wrap sm:flex-nowrap gap-2 w-full sm:w-auto">
                      <button onClick={() => scheduleCheckin(15)} className="flex-1 sm:flex-none bg-slate-100 hover:bg-green-100 hover:text-green-700 text-slate-600 font-black uppercase text-[10px] sm:text-xs px-4 py-3 rounded-[14px] transition-all border border-transparent hover:border-green-300">
                         +15 Dias
@@ -234,15 +303,15 @@ export default function PerfilAlunoPage({ params }: { params: Promise<{ id: stri
                      </button>
                      <div className="relative flex-1 sm:flex-none w-full sm:w-auto min-w-[130px]">
                         <input 
-   type="date" 
-   onChange={(e) => scheduleCheckin(0, e.target.value)} 
-   className="w-full bg-slate-900 text-white font-black uppercase text-[10px] sm:text-xs px-4 py-3 rounded-[14px] outline-none cursor-pointer tracking-widest text-center [color-scheme:dark]" 
-/>
+                           type="date" 
+                           onChange={(e) => scheduleCheckin(0, e.target.value)} 
+                           className="w-full bg-slate-900 text-white font-black uppercase text-[10px] sm:text-xs px-4 py-3 rounded-[14px] outline-none cursor-pointer tracking-widest text-center [color-scheme:dark]" 
+                        />
                      </div>
                   </div>
                </div>
 
-               {!evolucao ? (
+               {evolucao.length === 0 ? (
                   <div className="bg-white border-4 border-dashed border-slate-200 rounded-[40px] p-12 text-center flex flex-col items-center justify-center shadow-sm">
                      <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 mb-4">
                        <Camera size={32} />
@@ -251,60 +320,66 @@ export default function PerfilAlunoPage({ params }: { params: Promise<{ id: stri
                      <p className="text-slate-400 font-bold text-xs mt-2">O aluno ainda não enviou fotos de avaliação.</p>
                   </div>
                ) : (
-                  <div className="bg-slate-900 rounded-[30px] sm:rounded-[40px] p-5 sm:p-10 shadow-xl border border-slate-800 relative overflow-hidden">
-                     <div className="absolute top-0 right-0 w-32 h-32 bg-green-500 blur-[80px] opacity-10"></div>
-                     
-                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-6 mb-6 sm:mb-8 border-b border-slate-800 pb-5 sm:pb-6 relative z-10">
-                        <div>
-                           <div className="flex items-center gap-2 text-green-400 mb-1">
-                             <CheckCircle size={16} />
-                             <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.3em]">Último Check-in</span>
-                           </div>
-                           <h3 className="text-xl sm:text-3xl font-black text-white italic tracking-tighter">
-                             {new Date(evolucao.data_checkin).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
-                           </h3>
-                        </div>
+                  <div className="space-y-8 sm:space-y-12">
+                     {evolucao.map((item, index) => (
+                        <div key={item.id} className="bg-slate-900 rounded-[30px] sm:rounded-[40px] p-5 sm:p-10 shadow-xl border border-slate-800 relative overflow-hidden">
+                           <div className={`absolute top-0 right-0 w-32 h-32 blur-[80px] opacity-10 ${index === 0 ? 'bg-green-500' : 'bg-blue-500'}`}></div>
+                           
+                           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-6 mb-6 sm:mb-8 border-b border-slate-800 pb-5 sm:pb-6 relative z-10">
+                              <div>
+                                 <div className={`flex items-center gap-2 mb-1 ${index === 0 ? 'text-green-400' : 'text-blue-400'}`}>
+                                   <CheckCircle size={16} />
+                                   <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.3em]">
+                                       {index === 0 ? 'Avaliação Atual' : `Avaliação em ${new Date(item.data_checkin).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}`}
+                                   </span>
+                                 </div>
+                                 <h3 className="text-xl sm:text-3xl font-black text-white italic tracking-tighter uppercase">
+                                   {index === 0 ? 'Check-in Recente' : 'Histórico de Evolução'}
+                                 </h3>
+                              </div>
 
-                        <div className="bg-slate-800 border border-slate-700 p-3 sm:p-4 rounded-[16px] sm:rounded-[20px] flex items-center gap-3 sm:gap-4 w-full sm:w-auto shrink-0">
-                           <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-500/10 text-green-400 rounded-xl flex items-center justify-center shrink-0">
-                             <Scale size={20} className="sm:w-[24px] sm:h-[24px]"/>
+                              <div className="bg-slate-800 border border-slate-700 p-3 sm:p-4 rounded-[16px] sm:rounded-[20px] flex items-center gap-3 sm:gap-4 w-full sm:w-auto shrink-0">
+                                 <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-500/10 text-green-400 rounded-xl flex items-center justify-center shrink-0">
+                                   <Scale size={20} className="sm:w-[24px] sm:h-[24px]"/>
+                                 </div>
+                                 <div>
+                                   <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Peso Registrado</p>
+                                   <p className="text-xl sm:text-2xl font-black italic text-white">{item.peso} <span className="text-xs sm:text-sm text-green-400">kg</span></p>
+                                 </div>
+                              </div>
                            </div>
-                           <div>
-                             <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Peso em Jejum</p>
-                             <p className="text-xl sm:text-2xl font-black italic text-white">{evolucao.peso} <span className="text-xs sm:text-sm text-green-400">kg</span></p>
-                           </div>
-                        </div>
-                     </div>
 
-                     <div className="grid grid-cols-3 gap-2 sm:gap-6 relative z-10">
-                        <div className="flex flex-col gap-1.5 sm:gap-2">
-                           <div className="bg-slate-800 text-slate-400 text-[7px] sm:text-[10px] font-black uppercase tracking-widest text-center py-1.5 sm:py-2.5 rounded-t-[12px] sm:rounded-t-[16px] border border-slate-700 border-b-0 truncate px-1">Frontal</div>
-                           <a href={evolucao.foto_frente} target="_blank" className="aspect-[3/4] bg-slate-800 rounded-b-[12px] sm:rounded-b-[16px] overflow-hidden border border-slate-700 relative group cursor-pointer block shadow-lg">
-                             <img src={evolucao.foto_frente} alt="Frente" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity backdrop-blur-sm">
-                               <Maximize2 size={24} className="text-white drop-shadow-lg sm:w-[32px] sm:h-[32px]" />
-                             </div>
-                           </a>
+                           <div className="grid grid-cols-3 gap-2 sm:gap-6 relative z-10">
+                              <div className="flex flex-col gap-1.5 sm:gap-2">
+                                 <div className="bg-slate-800 text-slate-400 text-[7px] sm:text-[10px] font-black uppercase tracking-widest text-center py-1.5 sm:py-2.5 rounded-t-[12px] sm:rounded-t-[16px] border border-slate-700 border-b-0 truncate px-1">Frontal</div>
+                                 <a href={item.foto_frente} target="_blank" className="aspect-[3/4] bg-slate-800 rounded-b-[12px] sm:rounded-b-[16px] overflow-hidden border border-slate-700 relative group cursor-pointer block shadow-lg">
+                                   <img src={item.foto_frente} alt="Frente" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity backdrop-blur-sm">
+                                     <Maximize2 size={24} className="text-white drop-shadow-lg sm:w-[32px] sm:h-[32px]" />
+                                   </div>
+                                 </a>
+                              </div>
+                              <div className="flex flex-col gap-1.5 sm:gap-2">
+                                 <div className="bg-slate-800 text-slate-400 text-[7px] sm:text-[10px] font-black uppercase tracking-widest text-center py-1.5 sm:py-2.5 rounded-t-[12px] sm:rounded-t-[16px] border border-slate-700 border-b-0 truncate px-1">Lateral</div>
+                                 <a href={item.foto_lado} target="_blank" className="aspect-[3/4] bg-slate-800 rounded-b-[12px] sm:rounded-b-[16px] overflow-hidden border border-slate-700 relative group cursor-pointer block shadow-lg">
+                                   <img src={item.foto_lado} alt="Lado" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity backdrop-blur-sm">
+                                     <Maximize2 size={24} className="text-white drop-shadow-lg sm:w-[32px] sm:h-[32px]" />
+                                   </div>
+                                 </a>
+                              </div>
+                              <div className="flex flex-col gap-1.5 sm:gap-2">
+                                 <div className="bg-slate-800 text-slate-400 text-[7px] sm:text-[10px] font-black uppercase tracking-widest text-center py-1.5 sm:py-2.5 rounded-t-[12px] sm:rounded-t-[16px] border border-slate-700 border-b-0 truncate px-1">Dorsal</div>
+                                 <a href={item.foto_costas} target="_blank" className="aspect-[3/4] bg-slate-800 rounded-b-[12px] sm:rounded-b-[16px] overflow-hidden border border-slate-700 relative group cursor-pointer block shadow-lg">
+                                   <img src={item.foto_costas} alt="Costas" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity backdrop-blur-sm">
+                                     <Maximize2 size={24} className="text-white drop-shadow-lg sm:w-[32px] sm:h-[32px]" />
+                                   </div>
+                                 </a>
+                              </div>
+                           </div>
                         </div>
-                        <div className="flex flex-col gap-1.5 sm:gap-2">
-                           <div className="bg-slate-800 text-slate-400 text-[7px] sm:text-[10px] font-black uppercase tracking-widest text-center py-1.5 sm:py-2.5 rounded-t-[12px] sm:rounded-t-[16px] border border-slate-700 border-b-0 truncate px-1">Lateral</div>
-                           <a href={evolucao.foto_lado} target="_blank" className="aspect-[3/4] bg-slate-800 rounded-b-[12px] sm:rounded-b-[16px] overflow-hidden border border-slate-700 relative group cursor-pointer block shadow-lg">
-                             <img src={evolucao.foto_lado} alt="Lado" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity backdrop-blur-sm">
-                               <Maximize2 size={24} className="text-white drop-shadow-lg sm:w-[32px] sm:h-[32px]" />
-                             </div>
-                           </a>
-                        </div>
-                        <div className="flex flex-col gap-1.5 sm:gap-2">
-                           <div className="bg-slate-800 text-slate-400 text-[7px] sm:text-[10px] font-black uppercase tracking-widest text-center py-1.5 sm:py-2.5 rounded-t-[12px] sm:rounded-t-[16px] border border-slate-700 border-b-0 truncate px-1">Dorsal</div>
-                           <a href={evolucao.foto_costas} target="_blank" className="aspect-[3/4] bg-slate-800 rounded-b-[12px] sm:rounded-b-[16px] overflow-hidden border border-slate-700 relative group cursor-pointer block shadow-lg">
-                             <img src={evolucao.foto_costas} alt="Costas" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity backdrop-blur-sm">
-                               <Maximize2 size={24} className="text-white drop-shadow-lg sm:w-[32px] sm:h-[32px]" />
-                             </div>
-                           </a>
-                        </div>
-                     </div>
+                     ))}
                   </div>
                )}
             </div>
@@ -315,42 +390,50 @@ export default function PerfilAlunoPage({ params }: { params: Promise<{ id: stri
         ========================================= */}
         {activeTab === 'dossie' && (
             <div className="space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                
                 {/* INDICADORES GERAIS */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
-                  <div className="bg-white p-5 sm:p-8 rounded-[25px] sm:rounded-[40px] border border-slate-100 shadow-sm flex flex-col items-center relative overflow-hidden group hover:border-green-200 transition-colors">
-                    <div className="absolute top-0 right-0 w-12 h-12 bg-slate-50 rounded-bl-[30px] -z-10 group-hover:bg-green-50 transition-colors"></div>
-                    <Scale size={20} className="text-green-600 mb-2 sm:mb-4 sm:w-6 sm:h-6" />
-                    <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1 text-center">Peso Atual</span>
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+                  <div className="bg-white p-5 sm:p-6 rounded-[25px] sm:rounded-[30px] border border-slate-100 shadow-sm flex flex-col items-center justify-center relative overflow-hidden group hover:border-green-200 transition-colors">
+                    <Scale size={20} className="text-green-600 mb-2" />
+                    <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1">Peso</span>
                     {editMode ? (
-                      <input type="number" step="0.1" value={measures.weight} onChange={e => setMeasures({...measures, weight: e.target.value})} className="w-full text-center text-2xl sm:text-4xl font-black italic text-slate-900 border-b-2 border-green-500 focus:outline-none bg-transparent" />
+                      <input type="number" step="0.1" value={measures.weight} onChange={e => setMeasures({...measures, weight: e.target.value})} className="w-full text-center text-xl font-black italic text-slate-900 border-b-2 border-green-500 focus:outline-none bg-transparent" />
                     ) : (
-                      <span className="text-2xl sm:text-4xl font-black italic text-slate-800">{student?.weight ? `${student.weight}kg` : '--'}</span>
+                      <span className="text-xl sm:text-2xl font-black italic text-slate-800">{student?.weight ? `${student.weight}kg` : '--'}</span>
                     )}
                   </div>
                   
-                  <div className="bg-white p-5 sm:p-8 rounded-[25px] sm:rounded-[40px] border border-slate-100 shadow-sm flex flex-col items-center relative overflow-hidden group hover:border-green-200 transition-colors">
-                    <div className="absolute top-0 right-0 w-12 h-12 bg-slate-50 rounded-bl-[30px] -z-10 group-hover:bg-green-50 transition-colors"></div>
-                    <Ruler size={20} className="text-green-600 mb-2 sm:mb-4 sm:w-6 sm:h-6" />
-                    <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1 text-center">Altura</span>
+                  <div className="bg-white p-5 sm:p-6 rounded-[25px] sm:rounded-[30px] border border-slate-100 shadow-sm flex flex-col items-center justify-center relative overflow-hidden group hover:border-green-200 transition-colors">
+                    <Ruler size={20} className="text-green-600 mb-2" />
+                    <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1">Altura</span>
                     {editMode ? (
-                      <input type="number" value={measures.height} onChange={e => setMeasures({...measures, height: e.target.value})} className="w-full text-center text-2xl sm:text-4xl font-black italic text-slate-900 border-b-2 border-green-500 focus:outline-none bg-transparent" />
+                      <input type="number" value={measures.height} onChange={e => setMeasures({...measures, height: e.target.value})} className="w-full text-center text-xl font-black italic text-slate-900 border-b-2 border-green-500 focus:outline-none bg-transparent" />
                     ) : (
-                      <span className="text-2xl sm:text-4xl font-black italic text-slate-800">{student?.height ? `${student.height}cm` : '--'}</span>
+                      <span className="text-xl sm:text-2xl font-black italic text-slate-800">{student?.height ? `${student.height}cm` : '--'}</span>
+                    )}
+                  </div>
+
+                  {/* TELEFONE EDITÁVEL */}
+                  <div className="col-span-2 lg:col-span-1 bg-white p-5 sm:p-6 rounded-[25px] sm:rounded-[30px] border border-slate-100 shadow-sm flex flex-col items-center justify-center relative overflow-hidden group hover:border-green-200 transition-colors">
+                    <Phone size={20} className="text-green-600 mb-2" />
+                    <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1">WhatsApp</span>
+                    {editMode ? (
+                      <input type="text" placeholder="Ex: 11999999999" value={measures.phone} onChange={e => setMeasures({...measures, phone: e.target.value})} className="w-full text-center text-sm font-black italic text-slate-900 border-b-2 border-green-500 focus:outline-none bg-transparent" />
+                    ) : (
+                      <span className="text-base sm:text-lg font-black italic text-slate-800 break-all px-2">{student?.phone || '--'}</span>
                     )}
                   </div>
                   
-                  <div className="bg-white p-5 sm:p-8 rounded-[25px] sm:rounded-[40px] border border-slate-100 shadow-sm flex flex-col items-center relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 w-12 h-12 bg-slate-50 rounded-bl-[30px] -z-10"></div>
-                    <Utensils size={20} className="text-slate-400 mb-2 sm:mb-4 sm:w-6 sm:h-6" />
-                    <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1 text-center">Refeições</span>
-                    <span className="text-2xl sm:text-4xl font-black italic text-slate-800">{student?.meal_count || '--'}</span>
+                  <div className="bg-white p-5 sm:p-6 rounded-[25px] sm:rounded-[30px] border border-slate-100 shadow-sm flex flex-col items-center justify-center relative overflow-hidden group">
+                    <Utensils size={20} className="text-slate-400 mb-2" />
+                    <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1">Refeições</span>
+                    <span className="text-xl sm:text-2xl font-black italic text-slate-800">{student?.meal_count || '--'}</span>
                   </div>
                   
-                  <div className="bg-white p-5 sm:p-8 rounded-[25px] sm:rounded-[40px] border border-slate-100 shadow-sm flex flex-col items-center relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 w-12 h-12 bg-slate-50 rounded-bl-[30px] -z-10"></div>
-                    <UserIcon size={20} className="text-slate-400 mb-2 sm:mb-4 sm:w-6 sm:h-6" />
-                    <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1 text-center">Idade</span>
-                    <span className="text-2xl sm:text-4xl font-black italic text-slate-800">{student?.age || '--'}</span>
+                  <div className="bg-white p-5 sm:p-6 rounded-[25px] sm:rounded-[30px] border border-slate-100 shadow-sm flex flex-col items-center justify-center relative overflow-hidden group">
+                    <UserIcon size={20} className="text-slate-400 mb-2" />
+                    <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1">Idade</span>
+                    <span className="text-xl sm:text-2xl font-black italic text-slate-800">{student?.age || '--'}</span>
                   </div>
                 </div>
 
@@ -452,6 +535,34 @@ export default function PerfilAlunoPage({ params }: { params: Promise<{ id: stri
                       </div>
                     </div>
                 </div>
+
+                {/* 🚨 ZONA DE PERIGO 🚨 (Com respiro ajustado para desktop/mobile) */}
+                <div className="mt-12 pt-8 border-t-4 border-red-500/20 pb-16 sm:pb-32">
+                  <h3 className="flex items-center gap-2 font-black uppercase text-red-500 mb-6 tracking-widest pl-2">
+                    Zona de Perigo
+                  </h3>
+                  
+                  <div className="bg-red-50/50 p-6 rounded-[30px] border border-red-100 flex flex-col sm:flex-row gap-4 justify-between items-center mb-4">
+                    <div>
+                      <h4 className="font-black text-red-800 uppercase tracking-widest text-sm">Inativar Aluno</h4>
+                      <p className="text-[10px] sm:text-xs text-red-600/80 font-bold mt-1">O aluno perde o acesso, mas o histórico é preservado.</p>
+                    </div>
+                    <button onClick={handleInativar} className="w-full sm:w-auto bg-red-100 text-red-600 hover:bg-red-600 hover:text-white px-6 py-3.5 rounded-[16px] font-black uppercase text-[10px] tracking-widest transition-all shadow-sm">
+                      Bloquear Acesso
+                    </button>
+                  </div>
+
+                  <div className="bg-red-50 p-6 rounded-[30px] border border-red-200 flex flex-col sm:flex-row gap-4 justify-between items-center">
+                    <div>
+                      <h4 className="font-black text-red-900 uppercase tracking-widest text-sm">Excluir Conta</h4>
+                      <p className="text-[10px] sm:text-xs text-red-700/80 font-bold mt-1">Apaga fotos, check-ins, dietas e o perfil para sempre.</p>
+                    </div>
+                    <button onClick={handleDelete} className="w-full sm:w-auto bg-red-600 text-white hover:bg-red-700 px-6 py-3.5 rounded-[16px] font-black uppercase text-[10px] tracking-widest shadow-[0_10px_20px_rgba(220,38,38,0.3)] transition-all">
+                      Excluir Definitivamente
+                    </button>
+                  </div>
+                </div>
+
             </div>
         )}
 

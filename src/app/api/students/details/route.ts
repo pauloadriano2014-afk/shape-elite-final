@@ -10,10 +10,26 @@ export async function GET(req: Request) {
   try {
     const student = await sql`
       SELECT 
-        id, full_name, email, goal, weight, height, age,
-        meal_count, meal_flexibility, disliked_foods, allergies, 
-        supplements, wake_time, work_start, work_end, 
-        train_time, sleep_time, routine, digestive_health,
+        id, 
+        full_name, 
+        email, 
+        phone, -- A coluna mágica que estava faltando
+        goal, 
+        weight, 
+        height, 
+        age,
+        meal_count, 
+        meal_flexibility, 
+        disliked_foods, 
+        allergies, 
+        supplements, 
+        wake_time, 
+        work_start, 
+        work_end, 
+        train_time, 
+        sleep_time, 
+        routine, 
+        digestive_health,
         "photoUrl" as "photoUrl", 
         "photoPosition" as "photoPosition",
         next_checkin_date
@@ -21,6 +37,7 @@ export async function GET(req: Request) {
       WHERE id = ${id}::uuid 
       LIMIT 1
     `;
+    
     return NextResponse.json(student[0] || null);
   } catch (error) {
     console.error("Erro ao buscar detalhes:", error);
