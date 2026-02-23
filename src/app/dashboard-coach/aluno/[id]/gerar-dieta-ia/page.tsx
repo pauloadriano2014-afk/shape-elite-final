@@ -2,7 +2,7 @@
 
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, BrainCircuit, Wand2, Save, Loader2, Target, User as UserIcon } from 'lucide-react';
+import { ChevronLeft, BrainCircuit, Wand2, Save, Loader2, Target, User as UserIcon, AlertTriangle, Clock, Ban, Utensils, Zap } from 'lucide-react';
 
 export default function GerarDietaIAPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -24,10 +24,23 @@ export default function GerarDietaIAPage({ params }: { params: Promise<{ id: str
     setLoading(true);
 
     try {
-      // INSTRUÇÃO FORÇADA PARA A IA CORRIGIR A NOMENCLATURA AUTOMATICAMENTE
-      const strictFormatInstruction = "\n\n[REGRA ESTRITA DE FORMATAÇÃO]: NUNCA inclua a quantidade ou unidade no nome do alimento. O campo 'name' deve conter apenas o nome limpo do alimento (ex: 'Pão Integral', 'Frango Desfiado', 'Ovo'). Coloque os valores numéricos APENAS no campo 'amount' e a medida no campo 'unit'. Não use '2fatias de pão' no nome.";
+      const strictFormatInstruction = "\n\n[REGRA ESTRITA DE FORMATAÇÃO]: NUNCA inclua a quantidade ou unidade no nome do alimento. O campo 'name' deve conter apenas o nome limpo do alimento (ex: 'Pão Integral', 'Frango Desfiado', 'Ovo'). Coloque os valores numéricos APENAS no campo 'amount' e a medida no campo 'unit'. Não use '2fatias de pão' no nome. IMPORTANTE: Crie as refeições baseadas na quantidade solicitada pelo aluno.";
       
-      const payloadObservations = observations + strictFormatInstruction;
+      // INJEÇÃO DE CÉREBRO: O sistema empacota as respostas do formulário automaticamente para a IA
+      const anamneseData = `
+        [DADOS DO FORMULÁRIO DO ALUNO (CRIAÇÃO OBRIGATÓRIA BASEADA NISTO)]:
+        - Idade: ${student.age || 'Não informada'}
+        - Horário de Acordar: ${student.wake_time || 'Não informado'}
+        - Horário de Dormir: ${student.sleep_time || 'Não informado'}
+        - Horário de Treino: ${student.train_time || 'Não informado'}
+        - Alergias/Intolerâncias: ${student.allergies || 'Nenhuma'}
+        - Alimentos que ODEIA: ${student.disliked_foods || 'Nenhum'}
+        - Quantidade de Refeições desejada: ${student.meal_count || 'Padrão'}
+        - Flexibilidade exigida: ${student.meal_flexibility || 'Normal'}
+        - Suplementos que já usa: ${student.supplements || 'Nenhum'}
+      `;
+
+      const payloadObservations = anamneseData + "\n\n[INSTRUÇÕES DO COACH]: " + observations + strictFormatInstruction;
 
       const res = await fetch('/api/ai/generate-plan', {
         method: 'POST',
@@ -68,7 +81,7 @@ export default function GerarDietaIAPage({ params }: { params: Promise<{ id: str
     <div className="min-h-[100dvh] bg-slate-50 p-4 sm:p-6 pb-[env(safe-area-inset-bottom,24px)] text-black font-sans flex flex-col items-center justify-center">
       
       <div className="w-full max-w-lg">
-        <header className="mb-8 relative w-full flex flex-col items-center text-center">
+        <header className="mb-6 relative w-full flex flex-col items-center text-center">
           <button 
             onClick={() => router.back()} 
             className="absolute left-0 top-1/2 -translate-y-1/2 bg-white p-3 sm:p-4 rounded-[20px] shadow-sm border border-slate-100 hover:border-green-400 hover:text-green-600 active:scale-95 transition-all"
@@ -83,11 +96,11 @@ export default function GerarDietaIAPage({ params }: { params: Promise<{ id: str
             <h1 className="text-3xl sm:text-4xl font-black uppercase italic tracking-tighter leading-none text-slate-900">
               IA <span className="text-green-600">Generator</span>
             </h1>
-            <p className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-[0.3em] mt-2">Team Elite System</p>
+            <p className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-[0.3em] mt-2">Personalização Baseada em Dossiê</p>
           </div>
         </header>
 
-        <main className="space-y-6 w-full">
+        <main className="space-y-4 w-full">
           
           {/* BASE DO ATLETA */}
           <div className="bg-white p-6 sm:p-8 rounded-[35px] border border-slate-100 shadow-[0_10px_30px_-15px_rgba(0,0,0,0.1)] relative overflow-hidden">
@@ -109,16 +122,68 @@ export default function GerarDietaIAPage({ params }: { params: Promise<{ id: str
             </div>
           </div>
 
+          {/* DADOS DO DOSSIÊ (INJETADOS NA IA VISÍVEIS PARA O COACH) */}
+          <div className="bg-blue-50/50 p-5 sm:p-6 rounded-[30px] border border-blue-100/50 shadow-inner">
+             <p className="text-[9px] font-black uppercase tracking-[0.2em] text-blue-500 mb-4 flex items-center gap-2">
+               <BrainCircuit size={12}/> Dados Injetados na I.A.:
+             </p>
+             <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white p-3 rounded-[16px] border border-blue-100 shadow-sm flex items-start gap-2">
+                   <Clock size={14} className="text-blue-500 shrink-0 mt-0.5" />
+                   <div>
+                     <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Treino</p>
+                     <p className="text-xs font-bold text-slate-800">{student.train_time || 'N/A'}</p>
+                   </div>
+                </div>
+                
+                <div className="bg-white p-3 rounded-[16px] border border-blue-100 shadow-sm flex items-start gap-2">
+                   <Utensils size={14} className="text-emerald-500 shrink-0 mt-0.5" />
+                   <div>
+                     <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Refeições</p>
+                     <p className="text-[10px] font-bold text-slate-800 leading-tight">
+                        {student.meal_count ? `${student.meal_count} Refeições` : 'Padrão'}
+                        <br/>
+                        <span className="text-[8px] text-slate-500 font-normal leading-tight">{student.meal_flexibility || 'Flexível'}</span>
+                     </p>
+                   </div>
+                </div>
+
+                <div className="bg-white p-3 rounded-[16px] border border-blue-100 shadow-sm flex items-start gap-2">
+                   <AlertTriangle size={14} className="text-red-500 shrink-0 mt-0.5" />
+                   <div>
+                     <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Alergias</p>
+                     <p className="text-[10px] font-bold text-slate-800 leading-tight">{student.allergies || 'Nenhuma'}</p>
+                   </div>
+                </div>
+                
+                <div className="bg-white p-3 rounded-[16px] border border-blue-100 shadow-sm flex items-start gap-2">
+                   <Ban size={14} className="text-orange-500 shrink-0 mt-0.5" />
+                   <div>
+                     <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Odeia Comer</p>
+                     <p className="text-[10px] font-bold text-slate-800 italic leading-tight">{student.disliked_foods || 'Come tudo'}</p>
+                   </div>
+                </div>
+                
+                <div className="col-span-2 bg-white p-3 rounded-[16px] border border-blue-100 shadow-sm flex items-start gap-2">
+                   <Zap size={14} className="text-purple-500 shrink-0 mt-0.5" />
+                   <div>
+                     <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Suplementação Atual</p>
+                     <p className="text-[10px] font-bold text-slate-800 leading-tight">{student.supplements || 'Nenhum'}</p>
+                   </div>
+                </div>
+             </div>
+          </div>
+
           {/* INSTRUÇÕES EXTRAS */}
           <div className="bg-white p-6 sm:p-8 rounded-[35px] border border-slate-100 shadow-[0_10px_30px_-15px_rgba(0,0,0,0.1)] relative overflow-hidden">
             <div className="absolute top-0 left-0 w-1.5 h-full bg-green-500"></div>
             
             <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 flex items-center gap-2 mb-4">
-              <Wand2 size={14} /> Instruções Extras (Opcional)
+              <Wand2 size={14} /> Instruções Extras da Montagem (Opcional)
             </label>
             <textarea 
-              className="w-full p-5 bg-slate-50 rounded-[20px] border border-slate-200 outline-none focus:border-green-500 focus:bg-white focus:ring-4 focus:ring-green-500/10 font-bold text-sm h-32 resize-none transition-all placeholder:text-slate-300 text-slate-800"
-              placeholder="Ex: Sem lactose, prefere treinar de manhã, intolerância a glúten..."
+              className="w-full p-5 bg-slate-50 rounded-[20px] border border-slate-200 outline-none focus:border-green-500 focus:bg-white focus:ring-4 focus:ring-green-500/10 font-bold text-sm h-28 resize-none transition-all placeholder:text-slate-300 text-slate-800"
+              placeholder="A IA já leu o dossiê acima. Digite aqui apenas se quiser forçar algo a mais (Ex: Dieta low carb pesada, usar mais peixe, colocar doce de leite no pré-treino...)"
               value={observations}
               onChange={e => setObservations(e.target.value)}
             />
@@ -128,7 +193,7 @@ export default function GerarDietaIAPage({ params }: { params: Promise<{ id: str
           <button 
             onClick={handleGenerate}
             disabled={loading || generated}
-            className={`w-full p-6 sm:p-8 rounded-[30px] flex items-center justify-center shadow-xl transition-all active:scale-95 group min-h-[70px]
+            className={`w-full p-6 sm:p-8 rounded-[30px] flex items-center justify-center shadow-xl transition-all active:scale-95 group min-h-[70px] mt-4
               ${generated 
                 ? 'bg-green-500 text-white shadow-green-500/30' 
                 : 'bg-slate-900 text-white hover:bg-green-600 hover:shadow-green-500/30 disabled:opacity-70 disabled:scale-100'
@@ -144,7 +209,7 @@ export default function GerarDietaIAPage({ params }: { params: Promise<{ id: str
                 <BrainCircuit size={24} className="text-green-400 group-hover:text-white transition-colors" />
               )}
               <span className="font-black uppercase italic tracking-widest text-lg sm:text-xl">
-                {loading ? 'Processando IA...' : generated ? 'Dieta Criada!' : 'Gerar Dieta Base'}
+                {loading ? 'Processando Dossiê...' : generated ? 'Dieta Criada!' : 'Gerar com IA'}
               </span>
             </div>
           </button>

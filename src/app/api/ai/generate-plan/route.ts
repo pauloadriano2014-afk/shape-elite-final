@@ -52,6 +52,7 @@ export async function POST(req: Request) {
       DIRETRIZES TÉCNICAS:
       - Ovos: 100g de frango = 5 un de Ovos Inteiros.
       - Base de Pão: 50g.
+      - REGRA DE OURO (VEGETAIS): OBRIGATÓRIO! Em refeições que forem "Almoço", "Jantar" ou "Ceia", se você incluir Arroz e alguma Carne (Frango, Boi, Peixe ou Suíno), você DEVE ADICIONAR uma porção de Vegetais/Saladas (ex: 100g de Brócolis, Cenoura Cozida, Mix de Folhas, Abobrinha, Espinafre, etc).
     `;
 
     // PROMPT ATUALIZADO: FORÇANDO A SEPARAÇÃO DE NOME, QUANTIDADE E UNIDADE
@@ -66,7 +67,7 @@ export async function POST(req: Request) {
       REGRA ESTRITA DE ITEMS: 
       NUNCA coloque o número e a medida no campo "name" (Proibido: "2 fatias de pão").
       O campo "name" deve ter APENAS o nome limpo. 
-      Coloque o valor numérico em "amount" e a medida de grandeza em "unit".
+      Coloque o valor numérico em "amount" e a medida de grandeza em "unit" (ex: g, ml, un, fatias).
       
       Exemplo do formato JSON OBRIGATÓRIO:
       [
@@ -79,6 +80,16 @@ export async function POST(req: Request) {
             { "name": "Ovo Inteiro", "amount": 3, "unit": "un" },
             { "name": "Mamão", "amount": 100, "unit": "g" }
           ]
+        },
+        {
+          "time": "12:30",
+          "title": "Almoço",
+          "calories": "450",
+          "items": [
+            { "name": "Arroz Branco", "amount": 150, "unit": "g" },
+            { "name": "Frango Grelhado", "amount": 120, "unit": "g" },
+            { "name": "Brócolis (Cozido)", "amount": 100, "unit": "g" }
+          ]
         }
       ]
     `;
@@ -90,7 +101,7 @@ export async function POST(req: Request) {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "gpt-4o-mini", // ou gpt-4 se estiver usando
         messages: [{ role: "user", content: prompt }],
         temperature: 0.7,
       }),

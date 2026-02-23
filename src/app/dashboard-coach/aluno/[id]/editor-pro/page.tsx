@@ -2,7 +2,7 @@
 
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
-import { Save, ArrowLeft, Trash2, Calculator, Search, Plus, CheckCircle, X, FileText, Clock, ChevronDown, Copy, ArrowUp, ArrowDown, Edit2, Flame } from 'lucide-react';
+import { Save, ArrowLeft, Trash2, Calculator, Search, Plus, CheckCircle, X, FileText, Clock, ChevronDown, Copy, ArrowUp, ArrowDown, Edit2, Flame, PieChart } from 'lucide-react';
 
 export default function EditorProPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -28,12 +28,12 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
   
   const [cloneMealModal, setCloneMealModal] = useState({ isOpen: false, sourceMealIdx: 0, targetProtocolIdx: 0 });
 
-  // NOVO: Dicionário em Cache Inteligente para guardar as calorias dos alimentos pesquisados
   const [foodDict, setFoodDict] = useState<Record<string, any>>({});
 
   const categories = [
     { id: 'proteina', label: '🥩 Proteínas' },
     { id: 'carbo', label: '🍚 Carbos' },
+    { id: 'Legumes e Verduras', label: '🥗 Vegetais/Saladas' },
     { id: 'fruta', label: '🍎 Frutas' },
     { id: 'laticinio', label: '🥛 Laticínios' },
     { id: 'queijo', label: '🧀 Queijos/Frios' },
@@ -59,7 +59,8 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
   ];
 
   const unitConversions: {[key: string]: number} = {
-      'g': 1, 'ml': 1, 'un': 1, 
+      'g': 1, 'ml': 1, 
+      'un': 50, // Mudança Crucial: 1 UN = aprox 50g (peso de 1 ovo) para o fallback matemático
       'fatia': 25, 'colher': 20, 'xicara': 150, 'scoop': 30, 'escumadeira': 30
   };
 
@@ -77,7 +78,6 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
               amount: isObj && item.amount ? item.amount : (match ? match[1] : "100"),
               unit: isObj && item.unit ? item.unit : (match ? (match[2] || "g") : "g"),
               name: isObj && item.name_only ? item.name_only : (match ? match[3] : rawName),
-              // Preserva macros se já existirem no banco
               calories_per_100: item.calories_per_100 || null,
               conversion_factor: item.conversion_factor || null,
               category: item.category || "",
@@ -88,27 +88,38 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
   };
 
   useEffect(() => {
-    async function loadDiet() {
+    async function loadData() {
+      // 1. CARREGA A DIETA
       const res = await fetch(`/api/diet/latest?studentId=${id}`);
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
             if (!data[0].meals) {
-                setProtocols([{ 
-                    id: 'default', name: 'Protocolo Base', activeDays: [0, 1, 2, 3, 4, 5, 6], 
-                    meals: normalizeMeals(data) 
-                }]);
+                setProtocols([{ id: 'default', name: 'Protocolo Base', activeDays: [0, 1, 2, 3, 4, 5, 6], meals: normalizeMeals(data) }]);
             } else {
-                setProtocols(data.map((p: any) => ({
-                    ...p,
-                    meals: normalizeMeals(p.meals)
-                })));
+                setProtocols(data.map((p: any) => ({ ...p, meals: normalizeMeals(p.meals) })));
             }
         }
       }
+
+      // 2. CARREGA O DICIONÁRIO COMPLETO EM SEGUNDO PLANO (A CURA DO APAGÃO)
+      try {
+         const dbRes = await fetch(`/api/diet/search?q=`);
+         if (dbRes.ok) {
+            const dbData = await dbRes.json();
+            if (Array.isArray(dbData)) {
+               const dict: Record<string, any> = {};
+               dbData.forEach(f => {
+                  if (f.name) dict[f.name.toLowerCase()] = f;
+               });
+               setFoodDict(dict);
+            }
+         }
+      } catch (e) { console.error("Erro ao puxar dicionário"); }
+
       setLoading(false);
     }
-    loadDiet();
+    loadData();
   }, [id]);
 
   useEffect(() => {
@@ -117,26 +128,13 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
       ? `/api/diet/search?q=${query}` 
       : `/api/diet/search?category=${activeCategory}`;
       
-    fetch(url).then(res => res.json()).then(data => {
-        setSearchResults(data);
-        // Atualiza o Cache Inteligente de Calorias
-        if (Array.isArray(data)) {
-            setFoodDict(prev => {
-                const newDict = { ...prev };
-                data.forEach(f => {
-                    if (f.name) newDict[f.name.toLowerCase()] = f;
-                });
-                return newDict;
-            });
-        }
-    });
+    fetch(url).then(res => res.json()).then(data => setSearchResults(data));
   }, [searchTerm, activeCategory]);
 
-  // --- NOVO CÁLCULO DE CALORIAS BLINDADO ---
-  const calculateProtocolCalories = () => {
-      if (!protocols[activeProtocolIndex]) return 0;
+  const calculateMacros = () => {
+      if (!protocols[activeProtocolIndex]) return { cals: 0, prot: 0, carb: 0, fat: 0 };
       
-      let totalCalories = 0;
+      let p = 0, c = 0, f = 0;
       
       protocols[activeProtocolIndex].meals.forEach((meal: any) => {
           meal.items.forEach((item: any) => {
@@ -144,44 +142,71 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
               const amountRaw = parseFloat(item.amount) || 0;
               const totalQuantity = amountRaw * unitMultiplier;
               
-              // Busca os dados do item guardado ou do cache inteligente
-              const cal100 = item.calories_per_100 ?? foodDict[item.name?.toLowerCase()]?.calories_per_100;
-              const conv = item.conversion_factor ?? foodDict[item.name?.toLowerCase()]?.conversion_factor;
-              const cat = item.category || foodDict[item.name?.toLowerCase()]?.category || "";
+              const dbItem = foodDict[item.name?.toLowerCase()];
+              const cal100 = item.calories_per_100 ?? dbItem?.calories_per_100;
+              const conv = item.conversion_factor ?? dbItem?.conversion_factor;
+              const cat = item.category || dbItem?.category || "";
+              const nameLower = item.name?.toLowerCase() || "";
               
-              let itemCals = 0;
-              
-              if (cal100) {
-                  // Tem caloria oficial cadastrada (Ex: Legumes)
-                  itemCals = (Number(cal100) / 100) * totalQuantity;
-              } else if (conv) {
-                  // Tem fator de conversão de macros (Ex: Carnes e Carbos)
+              if (conv && cat !== 'Legumes e Verduras') {
                   const macroVal = Number(conv);
-                  if (cat.includes('proteina') || cat.includes('carne') || cat.includes('frango') || cat.includes('peixe') || cat.includes('ovo')) {
-                      itemCals = (totalQuantity * macroVal) * 4; 
+                  if (cat.includes('proteina') || nameLower.includes('carne') || nameLower.includes('frango') || nameLower.includes('peixe') || nameLower.includes('ovo')) {
+                      let itemProt = totalQuantity * macroVal;
+                      let itemFat = 0;
+                      if (nameLower.includes('ovo')) itemFat = totalQuantity * (macroVal * 0.83);
+                      else if (nameLower.includes('patinho') || nameLower.includes('mignon') || nameLower.includes('suíno') || nameLower.includes('carne')) itemFat = totalQuantity * (macroVal * 0.25);
+                      else itemFat = totalQuantity * (macroVal * 0.1);
+                      
+                      // Correção específica para Ovos (fator 6 por UNidade)
+                      if(nameLower.includes('ovo') && item.unit?.toLowerCase() === 'un') {
+                          p += amountRaw * 6; // 6g prot por ovo
+                          f += amountRaw * 5; // 5g gord por ovo
+                      } else {
+                          p += itemProt; f += itemFat;
+                      }
                   } else if (cat.includes('carbo')) {
-                      itemCals = (totalQuantity * macroVal) * 4; 
+                      let itemCarb = totalQuantity * macroVal;
+                      let itemProt = 0;
+                      let itemFat = 0;
+                      if (nameLower.includes('feijão') || nameLower.includes('lentilha') || nameLower.includes('grão')) itemProt = totalQuantity * (macroVal * 0.35);
+                      else if (nameLower.includes('aveia') || nameLower.includes('pão')) { itemProt = totalQuantity * (macroVal * 0.25); itemFat = totalQuantity * (macroVal * 0.1); }
+                      else itemProt = totalQuantity * (macroVal * 0.1);
+                      c += itemCarb; p += itemProt; f += itemFat;
                   } else if (cat.includes('gordura')) {
-                      itemCals = (totalQuantity * macroVal) * 9; 
+                      f += totalQuantity * macroVal;
                   } else {
-                      itemCals = (totalQuantity * macroVal) * 4; 
+                      c += totalQuantity * macroVal;
                   }
+              } else if (cal100) {
+                  c += (Number(cal100) / 400) * totalQuantity;
               } else {
-                  // Fallback: Se não achar nada no banco, faz uma estimativa pela palavra
-                  const nameLower = item.name?.toLowerCase() || "";
-                  if (nameLower.includes('frango') || nameLower.includes('carne') || nameLower.includes('peixe')) itemCals = totalQuantity * 1.5;
-                  else if (nameLower.includes('arroz') || nameLower.includes('batata') || nameLower.includes('mandioca') || nameLower.includes('pão')) itemCals = totalQuantity * 1.2;
-                  else if (nameLower.includes('ovo')) itemCals = totalQuantity * 1.4;
-                  else if (nameLower.includes('banana') || nameLower.includes('fruta')) itemCals = totalQuantity * 0.9;
-                  else itemCals = totalQuantity * 1.0;
+                  // Fallback Aprimorado (Cobre Whey, Tilápia, Atum que a IA gerou)
+                  if (nameLower.includes('frango') || nameLower.includes('carne') || nameLower.includes('peixe') || nameLower.includes('tilápia') || nameLower.includes('atum') || nameLower.includes('whey')) { 
+                      p += totalQuantity * 0.25; f += totalQuantity * 0.05; 
+                  }
+                  else if (nameLower.includes('arroz') || nameLower.includes('batata') || nameLower.includes('mandioca') || nameLower.includes('pão')) { 
+                      c += totalQuantity * 0.25; p += totalQuantity * 0.03; 
+                  }
+                  else if (nameLower.includes('ovo')) { 
+                      if (item.unit?.toLowerCase() === 'un') { p += amountRaw * 6; f += amountRaw * 5; } 
+                      else { p += totalQuantity * 0.12; f += totalQuantity * 0.10; }
+                  } 
+                  else if (nameLower.includes('banana') || nameLower.includes('fruta')) { c += totalQuantity * 0.22; }
+                  else if (nameLower.includes('queijo') || nameLower.includes('cottage')) { p += totalQuantity * 0.11; f += totalQuantity * 0.04; c += totalQuantity * 0.03; }
+                  else { c += totalQuantity * 0.2; }
               }
-              
-              totalCalories += itemCals;
           });
       });
       
-      return Math.round(totalCalories);
+      const cals = (p * 4) + (c * 4) + (f * 9);
+      return { cals: Math.round(cals), prot: Math.round(p), carb: Math.round(c), fat: Math.round(f) };
   };
+
+  const currentMacros = calculateMacros();
+  const totalMacros = currentMacros.prot + currentMacros.carb + currentMacros.fat || 1;
+  const pPct = Math.round((currentMacros.prot / totalMacros) * 100) || 0;
+  const cPct = Math.round((currentMacros.carb / totalMacros) * 100) || 0;
+  const fPct = Math.round((currentMacros.fat / totalMacros) * 100) || 0;
 
   const addProtocol = () => {
       setProtocols([...protocols, { 
@@ -242,7 +267,6 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
          amount: food.base_unit === 'un' ? "3" : "100", 
          unit: food.base_unit || "g",
          name: food.name,
-         // Salva os macros diretamente no item para evitar zerar o contador no futuro
          calories_per_100: food.calories_per_100,
          conversion_factor: food.conversion_factor,
          category: food.category,
@@ -296,7 +320,6 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
         items: meal.items.map((item: any) => ({
           ...item,
           name: `${item.amount}${item.unit} ${item.name}`,
-          // Envia as chaves extras para garantir salvamento completo
           calories_per_100: item.calories_per_100,
           conversion_factor: item.conversion_factor,
           category: item.category,
@@ -437,15 +460,39 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
                 </div>
             </div>
             
-            {/* CONTADOR DE CALORIAS */}
-            <div className="flex items-center gap-2 mb-6 bg-orange-50 border border-orange-100 text-orange-600 px-4 py-2 rounded-xl inline-flex w-fit">
-               <Flame size={16} className="shrink-0" />
-               <span className="text-xs font-black uppercase tracking-widest">
-                  Aprox: {calculateProtocolCalories()} <span className="text-[10px] opacity-70">Kcal</span>
-               </span>
+            {/* GRAFICO DASHBOARD DE MACROS */}
+            <div className="mb-6 bg-slate-50 border border-slate-200 rounded-[20px] p-4 sm:p-5 flex flex-col gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                   <div className="flex items-center gap-2 text-slate-700 bg-white px-4 py-2 rounded-[14px] border border-slate-100 shadow-sm w-fit">
+                       <Flame size={18} className="text-orange-500" />
+                       <span className="font-black uppercase tracking-widest text-sm">Aprox: {currentMacros.cals} <span className="text-[10px] opacity-70">Kcal</span></span>
+                   </div>
+                   <span className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] flex items-center gap-1.5"><PieChart size={14}/> Distribuição Atual</span>
+                </div>
+                
+                <div className="w-full h-3 sm:h-4 bg-slate-200 rounded-full overflow-hidden flex shadow-inner">
+                    <div style={{ width: `${cPct}%` }} className="bg-blue-500 h-full transition-all duration-500"></div>
+                    <div style={{ width: `${pPct}%` }} className="bg-red-500 h-full transition-all duration-500 border-l border-white/20"></div>
+                    <div style={{ width: `${fPct}%` }} className="bg-amber-400 h-full transition-all duration-500 border-l border-white/20"></div>
+                </div>
+
+                <div className="flex justify-between items-center text-[10px] sm:text-xs font-bold uppercase tracking-wide px-1">
+                    <div className="flex flex-col text-blue-600">
+                        <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500"></div> Carbo ({cPct}%)</span>
+                        <span className="text-slate-600 pl-3">{currentMacros.carb}g</span>
+                    </div>
+                    <div className="flex flex-col text-red-600 items-center">
+                        <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-500"></div> Prot ({pPct}%)</span>
+                        <span className="text-slate-600">{currentMacros.prot}g</span>
+                    </div>
+                    <div className="flex flex-col text-amber-600 items-end">
+                        <span className="flex items-center gap-1">Gord ({fPct}%) <div className="w-2 h-2 rounded-full bg-amber-400"></div></span>
+                        <span className="text-slate-600 pr-3">{currentMacros.fat}g</span>
+                    </div>
+                </div>
             </div>
             
-            <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3 sm:mb-4">Dias da Semana Ativos:</p>
+            <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3 sm:mb-4 border-t border-slate-200 pt-5">Dias da Semana Ativos:</p>
             <div className="flex gap-2 flex-wrap">
                 {weekDays.map(day => {
                    const isActive = protocols[activeProtocolIndex].activeDays.includes(day.idx);
@@ -777,7 +824,7 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
         </div>
       )}
 
-      <footer className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-xl border-t border-slate-200 z-[100] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+      <footer className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-xl border-t border-slate-200 z-[100] pb-[max(1.5rem,env(safe-area-bottom))]">
         <button onClick={saveDiet} className="max-w-4xl mx-auto w-full bg-slate-900 text-white py-5 rounded-[25px] font-black uppercase tracking-[0.2em] text-xs shadow-xl hover:bg-green-600 transition-all active:scale-[0.98] flex items-center justify-center gap-3">
           <Save size={20} className="text-green-400" /> Confirmar e Enviar Dieta
         </button>
