@@ -178,7 +178,7 @@ export default function DashboardCoachPage() {
                   </div>
 
                   <div className="space-y-2 min-w-0 flex-1">
-                    <h3 className="font-black uppercase italic text-xl sm:text-2xl leading-none text-slate-800 group-hover:text-green-600 transition-colors truncate pr-4">
+                    <h3 className="font-black uppercase italic text-xl sm:text-2xl leading-tight text-slate-800 group-hover:text-green-600 transition-colors break-words whitespace-normal pr-4">
                       {student.full_name}
                     </h3>
                     <div className="flex flex-wrap items-center gap-2 sm:gap-3">

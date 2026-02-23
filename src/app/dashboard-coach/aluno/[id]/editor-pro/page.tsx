@@ -2,17 +2,16 @@
 
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
-import { Save, ArrowLeft, Trash2, Calculator, Search, Plus, CheckCircle, X, FileText, Clock, Utensils, ChevronDown, Copy } from 'lucide-react';
+import { Save, ArrowLeft, Trash2, Calculator, Search, Plus, CheckCircle, X, FileText, Clock, ChevronDown, Copy, ArrowUp, ArrowDown, Edit2, Flame } from 'lucide-react';
 
 export default function EditorProPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { id } = use(params);
   
-  // NOVO: Estado de Protocolos (Substitui o estado simples de 'meals')
   const [protocols, setProtocols] = useState<any[]>([{ 
       id: 'default', 
       name: 'Protocolo Base', 
-      activeDays: [0, 1, 2, 3, 4, 5, 6], // 0 = Domingo, 1 = Segunda...
+      activeDays: [0, 1, 2, 3, 4, 5, 6], 
       meals: [] 
   }]);
   const [activeProtocolIndex, setActiveProtocolIndex] = useState(0);
@@ -24,9 +23,13 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
   const [manualSubIndex, setManualSubIndex] = useState<{mIdx: number, iIdx: number} | null>(null);
   const [suggestions, setSuggestions] = useState<{[key: string]: any[]}>({});
 
-  // ESTADOS DO MODAL DE TEMPLATE
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [templateName, setTemplateName] = useState('');
+  
+  const [cloneMealModal, setCloneMealModal] = useState({ isOpen: false, sourceMealIdx: 0, targetProtocolIdx: 0 });
+
+  // NOVO: Dicionário em Cache Inteligente para guardar as calorias dos alimentos pesquisados
+  const [foodDict, setFoodDict] = useState<Record<string, any>>({});
 
   const categories = [
     { id: 'proteina', label: '🥩 Proteínas' },
@@ -57,12 +60,11 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
 
   const unitConversions: {[key: string]: number} = {
       'g': 1, 'ml': 1, 'un': 1, 
-      'fatia': 25, 'colher': 20, 'xicara': 150, 'scoop': 30
+      'fatia': 25, 'colher': 20, 'xicara': 150, 'scoop': 30, 'escumadeira': 30
   };
 
   const [activeCategory, setActiveCategory] = useState('proteina');
 
-  // Helper para normalizar as refeições, seja de dados novos ou antigos
   const normalizeMeals = (mealsArray: any[]) => {
       return mealsArray.map((meal: any) => ({
           ...meal,
@@ -75,6 +77,10 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
               amount: isObj && item.amount ? item.amount : (match ? match[1] : "100"),
               unit: isObj && item.unit ? item.unit : (match ? (match[2] || "g") : "g"),
               name: isObj && item.name_only ? item.name_only : (match ? match[3] : rawName),
+              // Preserva macros se já existirem no banco
+              calories_per_100: item.calories_per_100 || null,
+              conversion_factor: item.conversion_factor || null,
+              category: item.category || "",
               substitutes: Array.isArray(item.substitutes) ? item.substitutes : [] 
             };
           }) : []
@@ -87,15 +93,12 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
-            // Verifica se é o formato NOVO (Array de Protocolos) ou ANTIGO (Array de Refeições)
             if (!data[0].meals) {
-                // Formato antigo: Converte as refeições para dentro de um "Protocolo Base"
                 setProtocols([{ 
                     id: 'default', name: 'Protocolo Base', activeDays: [0, 1, 2, 3, 4, 5, 6], 
                     meals: normalizeMeals(data) 
                 }]);
             } else {
-                // Formato Novo: Carrega os protocolos e normaliza as refeições de cada um
                 setProtocols(data.map((p: any) => ({
                     ...p,
                     meals: normalizeMeals(p.meals)
@@ -113,10 +116,73 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
     const url = query 
       ? `/api/diet/search?q=${query}` 
       : `/api/diet/search?category=${activeCategory}`;
-    fetch(url).then(res => res.json()).then(data => setSearchResults(data));
+      
+    fetch(url).then(res => res.json()).then(data => {
+        setSearchResults(data);
+        // Atualiza o Cache Inteligente de Calorias
+        if (Array.isArray(data)) {
+            setFoodDict(prev => {
+                const newDict = { ...prev };
+                data.forEach(f => {
+                    if (f.name) newDict[f.name.toLowerCase()] = f;
+                });
+                return newDict;
+            });
+        }
+    });
   }, [searchTerm, activeCategory]);
 
-  // --- FUNÇÕES DE GERENCIAMENTO DE PROTOCOLOS ---
+  // --- NOVO CÁLCULO DE CALORIAS BLINDADO ---
+  const calculateProtocolCalories = () => {
+      if (!protocols[activeProtocolIndex]) return 0;
+      
+      let totalCalories = 0;
+      
+      protocols[activeProtocolIndex].meals.forEach((meal: any) => {
+          meal.items.forEach((item: any) => {
+              const unitMultiplier = unitConversions[item.unit?.toLowerCase()] || 1;
+              const amountRaw = parseFloat(item.amount) || 0;
+              const totalQuantity = amountRaw * unitMultiplier;
+              
+              // Busca os dados do item guardado ou do cache inteligente
+              const cal100 = item.calories_per_100 ?? foodDict[item.name?.toLowerCase()]?.calories_per_100;
+              const conv = item.conversion_factor ?? foodDict[item.name?.toLowerCase()]?.conversion_factor;
+              const cat = item.category || foodDict[item.name?.toLowerCase()]?.category || "";
+              
+              let itemCals = 0;
+              
+              if (cal100) {
+                  // Tem caloria oficial cadastrada (Ex: Legumes)
+                  itemCals = (Number(cal100) / 100) * totalQuantity;
+              } else if (conv) {
+                  // Tem fator de conversão de macros (Ex: Carnes e Carbos)
+                  const macroVal = Number(conv);
+                  if (cat.includes('proteina') || cat.includes('carne') || cat.includes('frango') || cat.includes('peixe') || cat.includes('ovo')) {
+                      itemCals = (totalQuantity * macroVal) * 4; 
+                  } else if (cat.includes('carbo')) {
+                      itemCals = (totalQuantity * macroVal) * 4; 
+                  } else if (cat.includes('gordura')) {
+                      itemCals = (totalQuantity * macroVal) * 9; 
+                  } else {
+                      itemCals = (totalQuantity * macroVal) * 4; 
+                  }
+              } else {
+                  // Fallback: Se não achar nada no banco, faz uma estimativa pela palavra
+                  const nameLower = item.name?.toLowerCase() || "";
+                  if (nameLower.includes('frango') || nameLower.includes('carne') || nameLower.includes('peixe')) itemCals = totalQuantity * 1.5;
+                  else if (nameLower.includes('arroz') || nameLower.includes('batata') || nameLower.includes('mandioca') || nameLower.includes('pão')) itemCals = totalQuantity * 1.2;
+                  else if (nameLower.includes('ovo')) itemCals = totalQuantity * 1.4;
+                  else if (nameLower.includes('banana') || nameLower.includes('fruta')) itemCals = totalQuantity * 0.9;
+                  else itemCals = totalQuantity * 1.0;
+              }
+              
+              totalCalories += itemCals;
+          });
+      });
+      
+      return Math.round(totalCalories);
+  };
+
   const addProtocol = () => {
       setProtocols([...protocols, { 
           id: Date.now().toString(), 
@@ -125,6 +191,16 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
           meals: [] 
       }]);
       setActiveProtocolIndex(protocols.length);
+  };
+
+  const cloneProtocol = () => {
+      const currentProtocol = protocols[activeProtocolIndex];
+      const clonedProtocol = JSON.parse(JSON.stringify(currentProtocol));
+      clonedProtocol.id = Date.now().toString();
+      clonedProtocol.name = `${currentProtocol.name} (Cópia)`;
+      clonedProtocol.activeDays = []; 
+      setProtocols([...protocols, clonedProtocol]);
+      setActiveProtocolIndex(protocols.length); 
   };
 
   const toggleDay = (dayIndex: number) => {
@@ -138,10 +214,25 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
       setProtocols(n);
   };
 
-  // --- FUNÇÕES DE REFEIÇÕES (Agora atuam no Protocolo Ativo) ---
   const addMeal = () => {
     const n = [...protocols];
-    n[activeProtocolIndex].meals.push({ title: "Nova Refeição", time: "08:00", items: [], observations: "" });
+    n[activeProtocolIndex].meals.push({ title: "Café da Manhã", time: "08:00", items: [], observations: "" });
+    setProtocols(n);
+  };
+
+  const moveMealUp = (mIdx: number) => {
+    if(mIdx === 0) return;
+    const n = [...protocols];
+    const meals = n[activeProtocolIndex].meals;
+    [meals[mIdx - 1], meals[mIdx]] = [meals[mIdx], meals[mIdx - 1]];
+    setProtocols(n);
+  };
+
+  const moveMealDown = (mIdx: number) => {
+    const n = [...protocols];
+    const meals = n[activeProtocolIndex].meals;
+    if(mIdx === meals.length - 1) return;
+    [meals[mIdx + 1], meals[mIdx]] = [meals[mIdx], meals[mIdx + 1]];
     setProtocols(n);
   };
 
@@ -151,6 +242,10 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
          amount: food.base_unit === 'un' ? "3" : "100", 
          unit: food.base_unit || "g",
          name: food.name,
+         // Salva os macros diretamente no item para evitar zerar o contador no futuro
+         calories_per_100: food.calories_per_100,
+         conversion_factor: food.conversion_factor,
+         category: food.category,
          substitutes: []
     };
 
@@ -194,7 +289,6 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
   };
 
   const saveDiet = async () => {
-    // Formata o array mestre de protocolos para salvar
     const dietToSave = protocols.map(p => ({
       ...p,
       meals: p.meals.map((meal: any) => ({
@@ -202,6 +296,10 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
         items: meal.items.map((item: any) => ({
           ...item,
           name: `${item.amount}${item.unit} ${item.name}`,
+          // Envia as chaves extras para garantir salvamento completo
+          calories_per_100: item.calories_per_100,
+          conversion_factor: item.conversion_factor,
+          category: item.category,
           substitutes: item.substitutes 
         }))
       }))
@@ -222,7 +320,6 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
       return;
     }
     try {
-      // Prepara os dados exatamente no mesmo formato que vai pro app do aluno
       const contentToSave = protocols.map(p => ({
         ...p,
         meals: p.meals.map((meal: any) => ({
@@ -256,14 +353,10 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
 
   if (loading) return (
     <div className="min-h-[100dvh] bg-slate-900 flex flex-col items-center justify-center relative overflow-hidden">
-      {/* Luz de fundo */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[20rem] h-[20rem] bg-green-600 rounded-full blur-[120px] opacity-20 pointer-events-none"></div>
-      
-      {/* Logo Pulsando */}
       <div className="w-32 h-32 sm:w-40 sm:h-40 relative animate-[pulse_2s_ease-in-out_infinite] mb-6">
         <img src="/logo.png" alt="Carregando..." className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(22,163,74,0.4)]" />
       </div>
-      
       <p className="font-black uppercase tracking-[0.4em] text-green-500 italic text-xs sm:text-sm relative z-10">Sincronizando Elite...</p>
     </div>
   );
@@ -271,10 +364,7 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
   return (
     <div className="min-h-screen bg-slate-50 text-black font-sans flex flex-col relative overflow-x-hidden">
 
-      {/* BLOCO ÚNICO FIXO NO TOPO (Header + Abas travados juntos) */}
       <div className="fixed top-0 left-0 right-0 z-[100] bg-white/95 backdrop-blur-xl border-b border-slate-200 shadow-sm">
-        
-        {/* PARTE DE CIMA: Voltar e Salvar Template */}
         <header className="px-4 sm:px-6 pt-[max(1rem,env(safe-area-inset-top))] pb-3">
           <div className="max-w-4xl mx-auto flex items-center justify-between">
             <div className="flex items-center gap-3 sm:gap-4">
@@ -296,7 +386,6 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
           </div>
         </header>
 
-        {/* PARTE DE BAIXO: Abas de Ciclos (Travadas para não encavalar) */}
         <div className="px-4 sm:px-6 pb-3 max-w-4xl mx-auto">
           <div className="flex gap-2 overflow-x-auto no-scrollbar py-2">
               {protocols.map((p, idx) => (
@@ -304,37 +393,56 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
                     className={`px-5 py-3 rounded-2xl font-black uppercase text-[10px] whitespace-nowrap transition-all shadow-sm border
                       ${activeProtocolIndex === idx 
                         ? 'bg-slate-900 text-white border-slate-900' 
-                        : 'bg-white text-slate-400 border border-slate-200'
+                        : 'bg-white text-slate-400 border border-slate-200 hover:border-slate-300 hover:text-slate-600'
                       }
                     `}
                  > {p.name} </button>
               ))}
-              <button onClick={addProtocol} className="px-5 py-3 bg-green-50 text-green-600 border border-green-200 rounded-2xl font-black uppercase text-[10px] whitespace-nowrap flex items-center gap-2 shrink-0 active:scale-95">
+              <button onClick={addProtocol} className="px-5 py-3 bg-green-50 text-green-600 border border-green-200 rounded-2xl font-black uppercase text-[10px] whitespace-nowrap flex items-center gap-2 shrink-0 active:scale-95 hover:bg-green-100 transition-colors">
                  <Plus size={14}/> Ciclo
               </button>
           </div>
         </div>
       </div>
 
-      {/* CONTEÚDO (Com calço de 180px para aparecer abaixo do bloco fixo) */}
       <main className="flex-1 max-w-4xl mx-auto w-full px-4 sm:px-6 pt-[calc(180px+env(safe-area-inset-top))] pb-[250px] space-y-6">
 
         {/* --- CONFIGURAÇÃO DO PROTOCOLO ATIVO --- */}
         <div className="bg-white p-5 sm:p-8 rounded-[35px] border border-slate-100 shadow-[0_10px_30px_-15px_rgba(0,0,0,0.1)] relative animate-in fade-in slide-in-from-bottom-2 overflow-hidden">
             <div className="absolute top-0 left-0 w-1.5 h-full bg-slate-900"></div>
             
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                <input 
-                   className="text-2xl sm:text-3xl font-black uppercase italic text-slate-800 outline-none bg-transparent border-b-2 border-transparent focus:border-green-500 w-full transition-colors pb-1 placeholder:text-slate-300"
-                   value={protocols[activeProtocolIndex].name}
-                   onChange={(e) => { const n = [...protocols]; n[activeProtocolIndex].name = e.target.value; setProtocols(n); }}
-                   placeholder="NOME DO PROTOCOLO (Ex: Dia de Treino)"
-                />
-                {protocols.length > 1 && (
-                   <button onClick={() => { const n = [...protocols]; n.splice(activeProtocolIndex, 1); setProtocols(n); setActiveProtocolIndex(0); }} className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-colors shrink-0">
-                     <Trash2 size={20}/>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-5">
+                
+                <div className="flex-1 w-full relative group/protname border-b-2 border-transparent focus-within:border-green-500 pb-1 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <Edit2 size={20} className="text-slate-300 shrink-0" />
+                    <input 
+                       className="text-2xl sm:text-3xl font-black uppercase italic text-slate-800 outline-none bg-transparent w-full placeholder:text-slate-300"
+                       value={protocols[activeProtocolIndex].name}
+                       onChange={(e) => { const n = [...protocols]; n[activeProtocolIndex].name = e.target.value; setProtocols(n); }}
+                       placeholder="NOME DO PROTOCOLO"
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2 shrink-0">
+                   <button onClick={cloneProtocol} className="p-3 bg-blue-50 border border-blue-200 rounded-2xl text-blue-500 hover:bg-blue-600 hover:text-white transition-colors flex items-center gap-2 shadow-sm active:scale-95" title="Clonar este protocolo idêntico">
+                     <Copy size={20}/> <span className="hidden sm:inline text-[11px] font-black uppercase tracking-widest">Clonar</span>
                    </button>
-                )}
+                   {protocols.length > 1 && (
+                      <button onClick={() => { const n = [...protocols]; n.splice(activeProtocolIndex, 1); setProtocols(n); setActiveProtocolIndex(0); }} className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-colors shadow-sm active:scale-95" title="Excluir protocolo">
+                        <Trash2 size={20}/>
+                      </button>
+                   )}
+                </div>
+            </div>
+            
+            {/* CONTADOR DE CALORIAS */}
+            <div className="flex items-center gap-2 mb-6 bg-orange-50 border border-orange-100 text-orange-600 px-4 py-2 rounded-xl inline-flex w-fit">
+               <Flame size={16} className="shrink-0" />
+               <span className="text-xs font-black uppercase tracking-widest">
+                  Aprox: {calculateProtocolCalories()} <span className="text-[10px] opacity-70">Kcal</span>
+               </span>
             </div>
             
             <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3 sm:mb-4">Dias da Semana Ativos:</p>
@@ -346,11 +454,11 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
                          key={day.idx} 
                          onClick={() => toggleDay(day.idx)}
                          className={`w-12 h-12 sm:w-14 sm:h-14 rounded-[16px] sm:rounded-[20px] font-black text-xs sm:text-sm transition-all flex items-center justify-center border
-                           ${isActive 
-                             ? 'bg-green-600 border-green-600 text-white shadow-[0_5px_15px_rgba(22,163,74,0.3)] scale-105' 
-                             : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-white hover:border-green-400 hover:text-green-600'
-                           }
-                         `}
+                            ${isActive 
+                              ? 'bg-green-600 border-green-600 text-white shadow-[0_5px_15px_rgba(22,163,74,0.3)] scale-105' 
+                              : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-white hover:border-green-400 hover:text-green-600'
+                            }
+                          `}
                       >
                          {day.label}
                       </button>
@@ -361,14 +469,22 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
 
         {/* --- REFEIÇÕES DO PROTOCOLO ATIVO --- */}
         <div className="space-y-6 sm:space-y-8 mt-8">
-            {protocols[activeProtocolIndex].meals.map((meal: any, mIdx: number) => (
-              <div key={mIdx} className="bg-white rounded-[35px] border border-slate-100 p-5 sm:p-8 shadow-[0_10px_30px_-15px_rgba(0,0,0,0.1)] relative group/card transition-all hover:border-green-200">
+            {protocols[activeProtocolIndex].meals.map((meal: any, mIdx: number) => {
+              const isStandardTitle = mealTitles.includes(meal.title);
+              
+              return (
+              <div key={mIdx} className="bg-white rounded-[35px] border border-slate-100 p-5 sm:p-8 shadow-[0_10px_30px_-15px_rgba(0,0,0,0.1)] relative group/card transition-all hover:border-green-200 mt-8 pt-12 sm:pt-8">
                 <div className="absolute top-0 left-0 w-1.5 h-full bg-green-500 rounded-l-[35px]"></div>
                 
-                <button onClick={() => { const n = [...protocols]; n[activeProtocolIndex].meals.splice(mIdx, 1); setProtocols(n); }} className="absolute top-5 right-5 text-slate-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-xl transition-colors"><Trash2 size={18} /></button>
+                <div className="absolute top-4 right-4 sm:top-5 sm:right-5 flex items-center gap-1 bg-white sm:bg-transparent px-2 py-1 sm:p-0 rounded-2xl shadow-sm sm:shadow-none border border-slate-100 sm:border-none z-10">
+                  <button onClick={() => moveMealUp(mIdx)} disabled={mIdx === 0} className="p-2 text-slate-300 hover:text-green-600 hover:bg-green-50 rounded-xl transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-300" title="Mover para Cima"><ArrowUp size={18} /></button>
+                  <button onClick={() => moveMealDown(mIdx)} disabled={mIdx === protocols[activeProtocolIndex].meals.length - 1} className="p-2 text-slate-300 hover:text-green-600 hover:bg-green-50 rounded-xl transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-300" title="Mover para Baixo"><ArrowDown size={18} /></button>
+                  <div className="w-[1px] h-4 bg-slate-200 mx-1 hidden sm:block"></div>
+                  <button onClick={() => setCloneMealModal({isOpen: true, sourceMealIdx: mIdx, targetProtocolIdx: activeProtocolIndex})} className="p-2 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors" title="Clonar Refeição"><Copy size={18} /></button>
+                  <button onClick={() => { const n = [...protocols]; n[activeProtocolIndex].meals.splice(mIdx, 1); setProtocols(n); }} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors" title="Excluir Refeição"><Trash2 size={18} /></button>
+                </div>
 
-                {/* HEADER MODERNO: HORA E TÍTULO */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-6 pr-10">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-6 pr-0 sm:pr-40">
                    <div className="relative group shrink-0">
                      <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
                        <Clock size={16} className="text-green-600" />
@@ -383,22 +499,42 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
                      <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                    </div>
                    
-                   <div className="flex-1 w-full relative">
-                     <input 
-                       list={`titles-${mIdx}`} 
-                       className="w-full text-xl sm:text-2xl font-black uppercase italic text-slate-800 outline-none bg-transparent placeholder-slate-300 border-b-2 border-transparent focus:border-green-500 transition-all pb-1"
-                       value={meal.title}
-                       placeholder="NOME DA REFEIÇÃO"
-                       onChange={(e) => { const n = [...protocols]; n[activeProtocolIndex].meals[mIdx].title = e.target.value; setProtocols(n); }}
-                     />
-                     <datalist id={`titles-${mIdx}`}>
-                        {mealTitles.map(t => <option key={t} value={t} />)}
-                     </datalist>
+                   <div className="flex-1 w-full relative flex flex-col gap-2">
+                     <div className="relative border-b-2 border-slate-100 focus-within:border-green-500 transition-colors pb-1">
+                       <select 
+                         className="w-full text-xl sm:text-2xl font-black uppercase italic text-slate-800 bg-transparent outline-none cursor-pointer appearance-none pr-6"
+                         value={isStandardTitle ? meal.title : "OUTRO"}
+                         onChange={(e) => { 
+                            const n = [...protocols]; 
+                            if(e.target.value === "OUTRO"){
+                               n[activeProtocolIndex].meals[mIdx].title = ""; 
+                            } else {
+                               n[activeProtocolIndex].meals[mIdx].title = e.target.value; 
+                            }
+                            setProtocols(n); 
+                         }}
+                       >
+                         <option value="" disabled className="hidden">SELECIONE A REFEIÇÃO</option>
+                         {mealTitles.map(t => <option key={t} value={t}>{t}</option>)}
+                         <option value="OUTRO" className="font-bold text-slate-500">✏️ NOME PERSONALIZADO...</option>
+                       </select>
+                       <ChevronDown size={18} className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+                     </div>
+                     
+                     {!isStandardTitle && (
+                        <input 
+                           type="text"
+                           autoFocus
+                           className="w-full text-sm font-bold uppercase text-slate-600 outline-none bg-slate-50 border border-slate-200 p-3 rounded-[12px] focus:border-green-500 focus:bg-white transition-colors placeholder:text-slate-300"
+                           value={meal.title}
+                           placeholder="DIGITE O NOME DA REFEIÇÃO AQUI..."
+                           onChange={(e) => { const n = [...protocols]; n[activeProtocolIndex].meals[mIdx].title = e.target.value; setProtocols(n); }}
+                        />
+                     )}
                    </div>
                 </div>
 
-                {/* OBSERVAÇÕES (Ajustado para não cortar o texto) */}
-                <div className="mb-6 sm:mb-8 pl-1 sm:pl-2">
+                <div className="mb-6 sm:mb-8 pl-1 sm:pl-2 mt-4 sm:mt-0">
                    <div className="relative">
                       <FileText size={18} className="absolute top-5 left-4 text-amber-500" />
                       <textarea 
@@ -414,7 +550,6 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
                    </div>
                 </div>
 
-                {/* LISTA DE ALIMENTOS */}
                 <div className="space-y-3 pl-1 sm:pl-2">
                   {meal.items.map((item: any, iIdx: number) => {
                     const suggestionKey = `${mIdx}-${iIdx}`;
@@ -424,7 +559,6 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
                       <div key={iIdx} className="rounded-[25px] transition-all bg-slate-50 border border-slate-100 hover:border-green-200">
                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-3 sm:p-4 relative group/item">
                           
-                          {/* INPUT DE QUANTIDADE E UNIDADE */}
                           <div className="flex items-center bg-white border border-slate-200 rounded-[14px] px-2 py-1.5 h-12 w-full sm:w-auto shrink-0 shadow-sm focus-within:border-green-500 transition-colors">
                             <input 
                               type="number"
@@ -434,7 +568,7 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
                             />
                             <div className="h-6 w-[1px] bg-slate-200 mx-1"></div>
                             <select 
-                               className="bg-transparent text-[10px] font-black uppercase text-slate-500 outline-none appearance-none cursor-pointer w-16 text-center"
+                               className="bg-transparent text-[10px] font-black uppercase text-slate-500 outline-none appearance-none cursor-pointer w-auto pr-1 text-center"
                                value={item.unit}
                                onChange={(e) => { const n = [...protocols]; n[activeProtocolIndex].meals[mIdx].items[iIdx].unit = e.target.value; setProtocols(n); }}
                             >
@@ -445,6 +579,7 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
                                <option value="colher">COLHER</option>
                                <option value="scoop">SCOOP</option>
                                <option value="xicara">XÍC</option>
+                               <option value="escumadeira">ESC</option>
                             </select>
                           </div>
                           
@@ -458,7 +593,6 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
                           </div>
                         </div>
 
-                        {/* SUGESTÕES DA IA (VERDE) */}
                         {itemSuggestions.length > 0 && (
                           <div className="px-4 pb-4 animate-in slide-in-from-top-2">
                             <div className="p-4 bg-green-50 rounded-[20px] border border-green-100">
@@ -475,14 +609,28 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
                           </div>
                         )}
 
-                        {/* SUBSTITUTOS APROVADOS MANUAIS */}
                         {item.substitutes?.length > 0 && (
                           <div className="px-4 pb-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
                             {item.substitutes.map((sub: any, sIdx: number) => (
                               <div key={sIdx} className="flex items-center gap-3 bg-white border border-slate-200 p-2.5 pl-4 rounded-[16px] group/active hover:border-green-300 transition-colors">
-                                <div className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-[10px] border border-slate-100">
+                                <div className="flex items-center gap-1 bg-slate-50 px-2 py-1.5 rounded-[12px] border border-slate-200 focus-within:border-green-400 transition-colors">
                                    <input className="w-8 bg-transparent font-black text-xs text-slate-800 text-center outline-none hide-arrows" type="number" value={sub.amount} onChange={(e) => { const n = [...protocols]; n[activeProtocolIndex].meals[mIdx].items[iIdx].substitutes[sIdx].amount = e.target.value; setProtocols(n); }} />
-                                   <span className="text-[9px] font-black uppercase text-slate-400">{sub.unit}</span>
+                                   
+                                   <div className="h-4 w-[1px] bg-slate-300 mx-1"></div>
+                                   <select 
+                                      className="bg-transparent text-[9px] font-black uppercase text-slate-500 outline-none appearance-none cursor-pointer w-auto text-center pr-1"
+                                      value={sub.unit || 'g'}
+                                      onChange={(e) => { const n = [...protocols]; n[activeProtocolIndex].meals[mIdx].items[iIdx].substitutes[sIdx].unit = e.target.value; setProtocols(n); }}
+                                   >
+                                      <option value="g">G</option>
+                                      <option value="ml">ML</option>
+                                      <option value="un">UN</option>
+                                      <option value="fatia">FATIA</option>
+                                      <option value="colher">COLHER</option>
+                                      <option value="scoop">SCOOP</option>
+                                      <option value="xicara">XÍC</option>
+                                      <option value="escumadeira">ESC</option>
+                                   </select>
                                 </div>
                                 <span className="text-[10px] sm:text-[11px] font-bold uppercase text-slate-600 flex-1 truncate">{sub.name}</span>
                                 <button onClick={() => { const n = [...protocols]; n[activeProtocolIndex].meals[mIdx].items[iIdx].substitutes.splice(sIdx, 1); setProtocols(n); }} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-[10px] transition-all"><X size={14} /></button>
@@ -504,7 +652,7 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
                   )}
                 </div>
               </div>
-            ))}
+            );})}
             
             <button onClick={addMeal} className="w-full py-6 sm:py-8 bg-white border border-slate-200 rounded-[35px] shadow-sm text-slate-400 font-black uppercase tracking-[0.2em] hover:shadow-[0_10px_30px_-15px_rgba(0,0,0,0.1)] hover:border-green-300 hover:text-green-600 transition-all flex items-center justify-center gap-3">
                 <Plus size={24} className="text-green-500"/> Criar Nova Refeição
@@ -512,7 +660,6 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
         </div>
       </main>
 
-      {/* MODAL DE BUSCA ELITE */}
       {(activeMealIndex !== null) && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-50 flex items-end sm:items-center justify-center sm:p-4">
           <div className="bg-white w-full max-w-2xl h-[85vh] sm:h-[650px] rounded-t-[35px] sm:rounded-[40px] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-10 border border-slate-100">
@@ -569,14 +716,40 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
         </div>
       )}
 
-      {/* 3. FOOTER FIXED (COM VACINA PARA BARRINHA DE GESTOS) */}
-      <footer className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-xl border-t border-slate-200 z-[100] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-        <button onClick={saveDiet} className="max-w-4xl mx-auto w-full bg-slate-900 text-white py-5 rounded-[25px] font-black uppercase tracking-[0.2em] text-xs shadow-xl hover:bg-green-600 transition-all active:scale-[0.98] flex items-center justify-center gap-3">
-          <Save size={20} className="text-green-400" /> Confirmar e Enviar Dieta
-        </button>
-      </footer>
+      {cloneMealModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+           <div className="bg-white p-6 sm:p-8 rounded-[35px] max-w-sm w-full shadow-2xl relative animate-in fade-in zoom-in-95">
+              <button onClick={() => setCloneMealModal({...cloneMealModal, isOpen: false})} className="absolute top-4 right-4 text-slate-400 hover:text-slate-900 bg-slate-50 p-2 rounded-full"><X size={16}/></button>
+              <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-4 border border-blue-100"><Copy size={24}/></div>
+              <h3 className="text-xl font-black uppercase italic text-slate-900 mb-2">Copiar Refeição</h3>
+              <p className="text-xs font-bold text-slate-500 mb-6">Para qual ciclo você deseja enviar a cópia desta refeição?</p>
+              
+              <select
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-[16px] font-bold outline-none focus:border-blue-500 focus:bg-white transition-colors mb-6 text-slate-900 cursor-pointer"
+                value={cloneMealModal.targetProtocolIdx}
+                onChange={(e) => setCloneMealModal({...cloneMealModal, targetProtocolIdx: Number(e.target.value)})}
+              >
+                {protocols.map((p, idx) => (
+                   <option key={p.id} value={idx}>{p.name}</option>
+                ))}
+              </select>
 
-      {/* MODAL DE SALVAR TEMPLATE NA BIBLIOTECA */}
+              <button 
+                onClick={() => {
+                   const n = [...protocols];
+                   const mealCopy = JSON.parse(JSON.stringify(n[activeProtocolIndex].meals[cloneMealModal.sourceMealIdx]));
+                   n[cloneMealModal.targetProtocolIdx].meals.push(mealCopy);
+                   setProtocols(n);
+                   setCloneMealModal({...cloneMealModal, isOpen: false});
+                }}
+                className="w-full bg-slate-900 text-white font-black uppercase p-4 rounded-[16px] text-xs tracking-widest hover:bg-blue-600 transition-colors shadow-lg active:scale-95 flex justify-center gap-2"
+              >
+                <Copy size={16} className="text-blue-400" /> Confirmar Cópia
+              </button>
+           </div>
+        </div>
+      )}
+
       {showTemplateModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
            <div className="bg-white p-6 sm:p-8 rounded-[35px] max-w-sm w-full shadow-2xl relative animate-in fade-in zoom-in-95">
@@ -603,6 +776,12 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
            </div>
         </div>
       )}
+
+      <footer className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-xl border-t border-slate-200 z-[100] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+        <button onClick={saveDiet} className="max-w-4xl mx-auto w-full bg-slate-900 text-white py-5 rounded-[25px] font-black uppercase tracking-[0.2em] text-xs shadow-xl hover:bg-green-600 transition-all active:scale-[0.98] flex items-center justify-center gap-3">
+          <Save size={20} className="text-green-400" /> Confirmar e Enviar Dieta
+        </button>
+      </footer>
 
       <style jsx global>{`
         .hide-arrows::-webkit-outer-spin-button,

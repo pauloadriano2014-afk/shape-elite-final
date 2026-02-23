@@ -234,7 +234,7 @@ export default function PerfilAlunoPage({ params }: { params: Promise<{ id: stri
             </div>
             
             <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.4em] opacity-80 mb-2 italic text-green-400">Atleta Team Elite</p>
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black uppercase italic tracking-tighter leading-none mb-4 max-w-full truncate px-2">{student?.full_name}</h2>
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black uppercase italic tracking-tighter leading-tight mb-4 w-full break-words whitespace-normal px-2">{student?.full_name}</h2>
             
             <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
               <div className="flex items-center gap-2 sm:gap-3 bg-white/10 px-4 sm:px-6 py-2 sm:py-2.5 rounded-[16px] sm:rounded-[20px] text-[10px] sm:text-[11px] font-black uppercase italic border border-white/5 backdrop-blur-sm">
