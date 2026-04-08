@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { User, Mail, Lock, Phone, ArrowRight, Loader2 } from 'lucide-react';
+import InstallScreen from '@/components/InstallScreen'; // IMPORTANDO O PORTEIRO PWA
 
 export default function CadastroPage() {
   const router = useRouter();
@@ -14,6 +15,22 @@ export default function CadastroPage() {
     password: '',
     phone: '' 
   });
+
+  // --- ESTADOS DO PORTEIRO PWA ---
+  const [showInstallGate, setShowInstallGate] = useState(true); 
+  const [isCheckingPWA, setIsCheckingPWA] = useState(true);
+
+  useEffect(() => {
+    // Verifica se já está instalado ou se já recusou
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+    const hasDismissedInstall = sessionStorage.getItem('pwa_dismissed');
+
+    if (isStandalone || hasDismissedInstall) {
+      setShowInstallGate(false); 
+    }
+    
+    setIsCheckingPWA(false);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,6 +58,17 @@ export default function CadastroPage() {
       setLoading(false);
     }
   };
+
+  // EVITA PISCAR A TELA ANTES DE LER O DISPOSITIVO DO ALUNO
+  if (isCheckingPWA) return null;
+
+  // SE O ALUNO VEIO DO WHATSAPP E NÃO INSTALOU, O PORTEIRO BARRA AQUI!
+  if (showInstallGate) {
+    return <InstallScreen onContinue={() => {
+      setShowInstallGate(false);
+      sessionStorage.setItem('pwa_dismissed', 'true');
+    }} />;
+  }
 
   return (
     <div className="min-h-[100dvh] bg-slate-900 flex items-center justify-center p-4 sm:p-6 font-sans relative overflow-x-hidden">
@@ -74,7 +102,7 @@ export default function CadastroPage() {
           <div className="bg-white rounded-[35px] sm:rounded-[40px] p-6 sm:p-8 shadow-2xl border border-slate-100 space-y-4 relative overflow-hidden">
              <div className="absolute left-0 top-0 h-full w-1.5 bg-green-500"></div>
              
-             {/* CAMPO: NOME */}
+             {/* CAMPO: NOME (Mantém o uppercase) */}
              <div className="relative group">
                 <User className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-green-500 transition-colors" size={20} />
                 <input 
@@ -87,20 +115,20 @@ export default function CadastroPage() {
                 />
              </div>
 
-             {/* CAMPO: E-MAIL */}
+             {/* CAMPO: E-MAIL (Removido o uppercase) */}
              <div className="relative group">
                 <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-green-500 transition-colors" size={20} />
                 <input 
                   required 
                   type="email" 
                   placeholder="E-MAIL DE ACESSO" 
-                  className="w-full py-4 pr-4 pl-14 bg-slate-50 border border-slate-200 focus:border-green-500 focus:bg-white focus:ring-4 focus:ring-green-500/10 rounded-[20px] outline-none font-bold text-sm sm:text-base text-slate-900 transition-all placeholder:text-slate-400 uppercase" 
+                  className="w-full py-4 pr-4 pl-14 bg-slate-50 border border-slate-200 focus:border-green-500 focus:bg-white focus:ring-4 focus:ring-green-500/10 rounded-[20px] outline-none font-bold text-sm sm:text-base text-slate-900 transition-all placeholder:text-slate-400" 
                   value={formData.email} 
                   onChange={e => setFormData({...formData, email: e.target.value})} 
                 />
              </div>
 
-             {/* CAMPO: WHATSAPP (A NOVIDADE) */}
+             {/* CAMPO: WHATSAPP */}
              <div className="relative group">
                 <Phone className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-green-500 transition-colors" size={20} />
                 <input 
@@ -113,14 +141,14 @@ export default function CadastroPage() {
                 />
              </div>
 
-             {/* CAMPO: SENHA */}
+             {/* CAMPO: SENHA (Removido o uppercase, agora a senha é exata e oculta) */}
              <div className="relative group">
                 <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-green-500 transition-colors" size={20} />
                 <input 
                   required 
                   type="password" 
                   placeholder="CRIE UMA SENHA" 
-                  className="w-full py-4 pr-4 pl-14 bg-slate-50 border border-slate-200 focus:border-green-500 focus:bg-white focus:ring-4 focus:ring-green-500/10 rounded-[20px] outline-none font-bold text-sm sm:text-base text-slate-900 transition-all placeholder:text-slate-400 uppercase" 
+                  className="w-full py-4 pr-4 pl-14 bg-slate-50 border border-slate-200 focus:border-green-500 focus:bg-white focus:ring-4 focus:ring-green-500/10 rounded-[20px] outline-none font-bold text-sm sm:text-base text-slate-900 transition-all placeholder:text-slate-400" 
                   value={formData.password} 
                   onChange={e => setFormData({...formData, password: e.target.value})} 
                 />

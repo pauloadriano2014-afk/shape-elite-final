@@ -42,7 +42,7 @@ export default function DashboardCoachPage() {
 
   // --- FUNÇÃO CORRIGIDA: DISPARAR CONVITE VIP ---
   const handleShareInvite = async () => {
-    const appUrl = "https://shapeelitefinal.vercel.app/login"; 
+    const appUrl = "https://shapeelitefinal.vercel.app/cadastro"; 
     
     // Mensagem unissex, com foco no plano alimentar e com o nome correto do app
     const message = `Fala! Primeiramente, seja muito bem-vindo(a). Pronto(a) para transformar o seu shape? 🚀\n\nSeu acesso ao QG *Shape Natural* está liberado.\n\nInstale o nosso App Oficial (Shape de Elite) e faça seu login para acessar o seu plano alimentar totalmente personalizado:\n\n👉 ${appUrl}`;

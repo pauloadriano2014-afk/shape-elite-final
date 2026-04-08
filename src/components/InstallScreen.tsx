@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react';
-import { Share, Smartphone, CheckCircle, ArrowRight, Plus, MoreHorizontal } from 'lucide-react';
+import { Share, Smartphone, CheckCircle, ArrowRight, Plus, MoreHorizontal, Trophy } from 'lucide-react';
 
 interface InstallScreenProps {
   onContinue: () => void;
@@ -12,6 +12,7 @@ export default function InstallScreen({ onContinue }: InstallScreenProps) {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isIOS, setIsIOS] = useState(false);
   const [isChromeIOS, setIsChromeIOS] = useState(false);
+  const [hasJustInstalled, setHasJustInstalled] = useState(false); // NOVO RADAR DE INSTALAÇÃO
 
   useEffect(() => {
     const checkStandalone = () => {
@@ -32,7 +33,6 @@ export default function InstallScreen({ onContinue }: InstallScreenProps) {
     const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
     setIsIOS(isIOSDevice);
     
-    // Detecta especificamente se é o Chrome dentro do iOS
     if (isIOSDevice && /crios/.test(userAgent)) {
       setIsChromeIOS(true);
     }
@@ -42,8 +42,18 @@ export default function InstallScreen({ onContinue }: InstallScreenProps) {
       setDeferredPrompt(e);
     };
 
+    // RADAR: Detecta quando o App termina de ser instalado no Android/Chrome!
+    const installHandler = () => {
+      setHasJustInstalled(true);
+    };
+
     window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
+    window.addEventListener('appinstalled', installHandler);
+    
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler);
+      window.removeEventListener('appinstalled', installHandler);
+    };
   }, [onContinue]);
 
   const handleInstallClick = async () => {
@@ -52,6 +62,8 @@ export default function InstallScreen({ onContinue }: InstallScreenProps) {
     const { outcome } = await deferredPrompt.userChoice;
     if (outcome === 'accepted') {
       setDeferredPrompt(null);
+      // No Android as vezes o appinstalled já dispara, mas garantimos aqui também
+      setTimeout(() => setHasJustInstalled(true), 1500); 
     }
   };
 
@@ -69,9 +81,27 @@ export default function InstallScreen({ onContinue }: InstallScreenProps) {
     );
   }
 
+  // TELA DE SUCESSO (MOSTRADA ASSIM QUE A INSTALAÇÃO TERMINA)
+  if (hasJustInstalled) {
+    return (
+      <div className="fixed inset-0 w-screen h-[100dvh] z-[9999] bg-slate-950 flex flex-col items-center justify-center p-6 text-center touch-none overscroll-none overflow-hidden">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-80 h-80 bg-green-600 rounded-full blur-[150px] opacity-20 pointer-events-none"></div>
+        <div className="w-24 h-24 bg-green-500 rounded-[30px] flex items-center justify-center mb-8 shadow-[0_0_40px_rgba(22,163,74,0.4)] animate-in zoom-in duration-500">
+          <Trophy size={48} className="text-white" />
+        </div>
+        <h2 className="text-white text-3xl font-black uppercase italic tracking-tighter leading-tight mb-4">
+          INSTALAÇÃO<br/><span className="text-green-500">CONCLUÍDA!</span>
+        </h2>
+        <p className="text-slate-300 text-base font-medium max-w-xs mx-auto leading-relaxed">
+          Você já pode fechar o navegador.<br/><br/>
+          Vá até a tela inicial do seu celular, abra o app <strong className="text-white">Shape Elite</strong> e faça seu cadastro.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 w-screen h-[100dvh] z-[9999] bg-slate-950 flex flex-col items-center justify-center p-6 relative overflow-hidden touch-none overscroll-none">
-      {/* Luz de fundo */}
       <div className="absolute top-0 right-0 w-80 h-80 bg-green-600 rounded-full blur-[150px] opacity-20 pointer-events-none"></div>
       <div className="absolute bottom-0 left-0 w-80 h-80 bg-blue-600 rounded-full blur-[150px] opacity-10 pointer-events-none"></div>
       
@@ -82,19 +112,17 @@ export default function InstallScreen({ onContinue }: InstallScreenProps) {
           SHAPE <span className="text-green-500">ELITE</span>
         </h1>
         <p className="text-slate-400 text-center mt-4 text-sm font-medium leading-relaxed">
-          Instale o App oficial para ter acesso rápido ao seu plano e notificações do Coach.
+          Instale o App oficial para ter acesso rápido ao seu plano e criar sua conta.
         </p>
 
         <div className="w-full mt-10 space-y-4">
           {isIOS ? (
-            /* INSTRUÇÕES iOS (Separadas para Safari e Chrome) */
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-[30px] shadow-xl">
               <h3 className="text-green-500 font-black uppercase text-[10px] tracking-[0.2em] mb-6 text-center">
                 Como instalar no {isChromeIOS ? "Chrome" : "Safari"}
               </h3>
               
               {isChromeIOS ? (
-                /* INSTRUÇÕES ESPECÍFICAS DO CHROME (iOS) */
                 <div className="space-y-6">
                   <div className="flex items-start gap-4">
                     <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center shrink-0 border border-blue-500/20">
@@ -122,7 +150,6 @@ export default function InstallScreen({ onContinue }: InstallScreenProps) {
                   </div>
                 </div>
               ) : (
-                /* INSTRUÇÕES ESPECÍFICAS DO SAFARI (iOS) */
                 <div className="space-y-6">
                   <div className="flex items-start gap-4">
                     <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center shrink-0 border border-slate-700">
@@ -153,7 +180,6 @@ export default function InstallScreen({ onContinue }: InstallScreenProps) {
 
             </div>
           ) : (
-            /* BOTÃO ANDROID / CHROME */
             <button
               onClick={handleInstallClick}
               className="w-full bg-green-600 hover:bg-green-500 text-white font-black uppercase tracking-widest py-5 rounded-[22px] flex items-center justify-center gap-3 shadow-[0_15px_30px_-10px_rgba(22,163,74,0.4)] transition-all active:scale-95"
@@ -167,7 +193,7 @@ export default function InstallScreen({ onContinue }: InstallScreenProps) {
             onClick={onContinue}
             className="w-full py-4 mt-2 text-slate-500 hover:text-white text-[10px] font-black uppercase tracking-[0.2em] transition-colors flex items-center justify-center gap-2"
           >
-            Continuar pelo navegador <ArrowRight size={12} />
+            Já tenho conta (Entrar) <ArrowRight size={12} />
           </button>
         </div>
       </div>
