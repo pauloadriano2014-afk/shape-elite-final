@@ -60,12 +60,13 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
 
   const unitConversions: {[key: string]: number} = {
       'g': 1, 'ml': 1, 
-      'un': 50, // Mudança Crucial: 1 UN = aprox 50g (peso de 1 ovo) para o fallback matemático
+      'un': 1, 
       'fatia': 25, 'colher': 20, 'xicara': 150, 'scoop': 30, 'escumadeira': 30
   };
 
   const [activeCategory, setActiveCategory] = useState('proteina');
 
+  // NORMALIZADOR COM INJEÇÃO DA "PROPORÇÃO DOURADA" PARA OS SUBSTITUTOS
   const normalizeMeals = (mealsArray: any[]) => {
       return mealsArray.map((meal: any) => ({
           ...meal,
@@ -74,14 +75,22 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
             const isObj = typeof item === 'object';
             const rawName = isObj ? (item.name || "") : item;
             const match = rawName.match(/^(\d+)\s*([a-zA-Z]+)?\s+(.*)$/);
+            
+            const finalAmountStr = isObj && item.amount ? item.amount : (match ? match[1] : "100");
+            const baseAmt = parseFloat(finalAmountStr) || 1;
+
             return { 
-              amount: isObj && item.amount ? item.amount : (match ? match[1] : "100"),
+              amount: finalAmountStr,
               unit: isObj && item.unit ? item.unit : (match ? (match[2] || "g") : "g"),
               name: isObj && item.name_only ? item.name_only : (match ? match[3] : rawName),
               calories_per_100: item.calories_per_100 || null,
               conversion_factor: item.conversion_factor || null,
               category: item.category || "",
-              substitutes: Array.isArray(item.substitutes) ? item.substitutes : [] 
+              substitutes: Array.isArray(item.substitutes) ? item.substitutes.map((sub: any) => ({
+                  ...sub,
+                  // Se já tem a proporção guardada usa, senão calcula a proporção atual do banco
+                  ratio_to_base: sub.ratio_to_base || ( (parseFloat(sub.amount) || 0) / baseAmt )
+              })) : [] 
             };
           }) : []
       }));
@@ -89,7 +98,6 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
 
   useEffect(() => {
     async function loadData() {
-      // 1. CARREGA A DIETA
       const res = await fetch(`/api/diet/latest?studentId=${id}`);
       if (res.ok) {
         const data = await res.json();
@@ -102,7 +110,6 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
         }
       }
 
-      // 2. CARREGA O DICIONÁRIO COMPLETO EM SEGUNDO PLANO (A CURA DO APAGÃO)
       try {
          const dbRes = await fetch(`/api/diet/search?q=`);
          if (dbRes.ok) {
@@ -140,7 +147,7 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
           meal.items.forEach((item: any) => {
               const unitMultiplier = unitConversions[item.unit?.toLowerCase()] || 1;
               const amountRaw = parseFloat(item.amount) || 0;
-              const totalQuantity = amountRaw * unitMultiplier;
+              let totalQuantity = amountRaw * unitMultiplier;
               
               const dbItem = foodDict[item.name?.toLowerCase()];
               const cal100 = item.calories_per_100 ?? dbItem?.calories_per_100;
@@ -148,53 +155,83 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
               const cat = item.category || dbItem?.category || "";
               const nameLower = item.name?.toLowerCase() || "";
               
-              if (conv && cat !== 'Legumes e Verduras') {
-                  const macroVal = Number(conv);
-                  if (cat.includes('proteina') || nameLower.includes('carne') || nameLower.includes('frango') || nameLower.includes('peixe') || nameLower.includes('ovo')) {
-                      let itemProt = totalQuantity * macroVal;
-                      let itemFat = 0;
-                      if (nameLower.includes('ovo')) itemFat = totalQuantity * (macroVal * 0.83);
-                      else if (nameLower.includes('patinho') || nameLower.includes('mignon') || nameLower.includes('suíno') || nameLower.includes('carne')) itemFat = totalQuantity * (macroVal * 0.25);
-                      else itemFat = totalQuantity * (macroVal * 0.1);
-                      
-                      // Correção específica para Ovos (fator 6 por UNidade)
-                      if(nameLower.includes('ovo') && item.unit?.toLowerCase() === 'un') {
-                          p += amountRaw * 6; // 6g prot por ovo
-                          f += amountRaw * 5; // 5g gord por ovo
-                      } else {
-                          p += itemProt; f += itemFat;
-                      }
-                  } else if (cat.includes('carbo')) {
-                      let itemCarb = totalQuantity * macroVal;
-                      let itemProt = 0;
-                      let itemFat = 0;
-                      if (nameLower.includes('feijão') || nameLower.includes('lentilha') || nameLower.includes('grão')) itemProt = totalQuantity * (macroVal * 0.35);
-                      else if (nameLower.includes('aveia') || nameLower.includes('pão')) { itemProt = totalQuantity * (macroVal * 0.25); itemFat = totalQuantity * (macroVal * 0.1); }
-                      else itemProt = totalQuantity * (macroVal * 0.1);
-                      c += itemCarb; p += itemProt; f += itemFat;
-                  } else if (cat.includes('gordura')) {
-                      f += totalQuantity * macroVal;
-                  } else {
-                      c += totalQuantity * macroVal;
-                  }
-              } else if (cal100) {
-                  c += (Number(cal100) / 400) * totalQuantity;
-              } else {
-                  // Fallback Aprimorado (Cobre Whey, Tilápia, Atum que a IA gerou)
-                  if (nameLower.includes('frango') || nameLower.includes('carne') || nameLower.includes('peixe') || nameLower.includes('tilápia') || nameLower.includes('atum') || nameLower.includes('whey')) { 
-                      p += totalQuantity * 0.25; f += totalQuantity * 0.05; 
-                  }
-                  else if (nameLower.includes('arroz') || nameLower.includes('batata') || nameLower.includes('mandioca') || nameLower.includes('pão')) { 
-                      c += totalQuantity * 0.25; p += totalQuantity * 0.03; 
-                  }
-                  else if (nameLower.includes('ovo')) { 
-                      if (item.unit?.toLowerCase() === 'un') { p += amountRaw * 6; f += amountRaw * 5; } 
-                      else { p += totalQuantity * 0.12; f += totalQuantity * 0.10; }
-                  } 
-                  else if (nameLower.includes('banana') || nameLower.includes('fruta')) { c += totalQuantity * 0.22; }
-                  else if (nameLower.includes('queijo') || nameLower.includes('cottage')) { p += totalQuantity * 0.11; f += totalQuantity * 0.04; c += totalQuantity * 0.03; }
-                  else { c += totalQuantity * 0.2; }
+              let itemProt = 0;
+              let itemCarb = 0;
+              let itemFat = 0;
+
+              if (item.unit?.toLowerCase() === 'un') {
+                  if (nameLower.includes('crisp')) totalQuantity = amountRaw * 45;
+                  else if (nameLower.includes('darkness')) totalQuantity = amountRaw * 90;
+                  else if (nameLower.includes('bold')) totalQuantity = amountRaw * 60;
+                  else if (nameLower.includes('yopro 15g')) totalQuantity = amountRaw * 250;
+                  else if (nameLower.includes('yopro 25g')) totalQuantity = amountRaw * 250;
+                  else if (nameLower.includes('piracanjuba')) totalQuantity = amountRaw * 250;
               }
+
+              if (nameLower.includes('ovo') && item.unit?.toLowerCase() === 'un') {
+                  itemProt = amountRaw * 6; 
+                  itemFat = amountRaw * 5; 
+              } 
+              else if (conv && cat !== 'Legumes e Verduras') {
+                  const macroVal = Number(conv);
+                  const isProtein = cat.includes('proteina') || nameLower.includes('carne') || nameLower.includes('frango') || nameLower.includes('peixe') || nameLower.includes('whey') || nameLower.includes('yopro') || nameLower.includes('barra') || nameLower.includes('bebida');
+                  const isCarbo = cat.includes('carbo') || nameLower.includes('arroz') || nameLower.includes('batata') || nameLower.includes('pão') || nameLower.includes('aveia');
+                  const isFat = cat.includes('gordura');
+
+                  if (isProtein) {
+                      itemProt = totalQuantity * macroVal;
+                      
+                      if (cal100) {
+                          const exactKcal = (Number(cal100) / 100) * totalQuantity;
+                          const protKcal = itemProt * 4;
+                          const leftKcal = Math.max(0, exactKcal - protKcal);
+                          
+                          itemCarb = (leftKcal * 0.6) / 4;
+                          itemFat = (leftKcal * 0.4) / 9;
+                      } else {
+                          if (nameLower.includes('patinho') || nameLower.includes('mignon') || nameLower.includes('suíno') || nameLower.includes('carne')) itemFat = totalQuantity * (macroVal * 0.25);
+                          else itemFat = totalQuantity * (macroVal * 0.1);
+                      }
+                  } else if (isCarbo) {
+                      itemCarb = totalQuantity * macroVal;
+                      if (cal100) {
+                          const exactKcal = (Number(cal100) / 100) * totalQuantity;
+                          const carbKcal = itemCarb * 4;
+                          const leftKcal = Math.max(0, exactKcal - carbKcal);
+                          itemProt = (leftKcal * 0.7) / 4;
+                          itemFat = (leftKcal * 0.3) / 9;
+                      } else {
+                          if (nameLower.includes('feijão') || nameLower.includes('lentilha')) itemProt = totalQuantity * (macroVal * 0.35);
+                          else if (nameLower.includes('aveia')) { itemProt = totalQuantity * (macroVal * 0.25); itemFat = totalQuantity * (macroVal * 0.1); }
+                          else itemProt = totalQuantity * (macroVal * 0.1);
+                      }
+                  } else if (isFat) {
+                      itemFat = totalQuantity * macroVal;
+                  } else {
+                      itemCarb = totalQuantity * macroVal;
+                  }
+              } 
+              else if (cal100) {
+                  itemCarb = (Number(cal100) / 400) * totalQuantity;
+              } 
+              else {
+                  let fallbackQty = totalQuantity;
+                  if (item.unit?.toLowerCase() === 'un' && !nameLower.includes('ovo')) fallbackQty = amountRaw * 80;
+
+                  if (nameLower.includes('frango') || nameLower.includes('carne') || nameLower.includes('peixe') || nameLower.includes('whey')) { 
+                      itemProt = fallbackQty * 0.25; itemFat = fallbackQty * 0.05; 
+                  } else if (nameLower.includes('arroz') || nameLower.includes('batata') || nameLower.includes('pão')) { 
+                      itemCarb = fallbackQty * 0.25; itemProt = fallbackQty * 0.03; 
+                  } else if (nameLower.includes('banana') || nameLower.includes('fruta')) { 
+                      itemCarb = fallbackQty * 0.22; 
+                  } else { 
+                      itemCarb = fallbackQty * 0.2; 
+                  }
+              }
+
+              p += itemProt;
+              c += itemCarb;
+              f += itemFat;
           });
       });
       
@@ -285,15 +322,46 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
     setSearchTerm('');
   };
 
+  // --- NOVA FUNÇÃO: RECALCULA SUBSTITUTOS AO MEXER NO ALIMENTO PRINCIPAL ---
+  const handleAmountChange = (mIdx: number, iIdx: number, newValueRaw: string) => {
+      const n = [...protocols];
+      const item = n[activeProtocolIndex].meals[mIdx].items[iIdx];
+      const newAmount = parseFloat(newValueRaw);
+      
+      // Se for um número válido, redimensiona matematicamente todos os substitutos salvos!
+      if (!isNaN(newAmount) && newAmount > 0) {
+          item.substitutes.forEach((sub: any) => {
+              if (sub.ratio_to_base) {
+                  let finalAmt = newAmount * sub.ratio_to_base;
+                  
+                  // Arredondamento limpo e inteligente
+                  if (sub.unit?.toLowerCase() === 'g' || sub.unit?.toLowerCase() === 'ml') {
+                      sub.amount = Math.round(finalAmt).toString();
+                  } else {
+                      sub.amount = Number(finalAmt.toFixed(1)).toString();
+                  }
+              }
+          });
+      }
+      
+      item.amount = newValueRaw;
+      setProtocols(n);
+  };
+
   const calculateSubs = async (mealIndex: number, itemIndex: number) => {
     const item = protocols[activeProtocolIndex].meals[mealIndex].items[itemIndex];
     let apiAmount = parseFloat(item.amount);
-    if (unitConversions[item.unit]) {
+    
+    if (item.unit?.toLowerCase() !== 'un' && unitConversions[item.unit]) {
         apiAmount = apiAmount * unitConversions[item.unit];
     }
-    const queryText = `${apiAmount} g ${item.name}`; 
+    
+    const queryUnit = item.unit?.toLowerCase() === 'un' ? 'un' : 'g';
+    const queryText = `${apiAmount} ${queryUnit} ${item.name}`; 
+    
     const key = `${mealIndex}-${itemIndex}`;
     setSuggestions(prev => ({ ...prev, [key]: [] }));
+    
     const res = await fetch(`/api/diet/substitutes?itemText=${encodeURIComponent(queryText)}`);
     if (res.ok) {
       const data = await res.json();
@@ -303,9 +371,16 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
 
   const approveSub = (mealIndex: number, itemIndex: number, sub: any) => {
     const n = [...protocols];
-    const exists = n[activeProtocolIndex].meals[mealIndex].items[itemIndex].substitutes.find((s: any) => s.name === sub.name);
+    const item = n[activeProtocolIndex].meals[mealIndex].items[itemIndex];
+    const exists = item.substitutes.find((s: any) => s.name === sub.name);
+    
     if (!exists) {
-      n[activeProtocolIndex].meals[mealIndex].items[itemIndex].substitutes.push(sub);
+      // Cria a "Proporção Dourada" no momento que o Coach aprova a sugestão
+      const baseAmt = parseFloat(item.amount) || 1;
+      const subAmt = parseFloat(sub.amount) || 0;
+      sub.ratio_to_base = subAmt / baseAmt;
+        
+      item.substitutes.push(sub);
       setProtocols(n);
     }
     const key = `${mealIndex}-${itemIndex}`;
@@ -607,11 +682,12 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-3 sm:p-4 relative group/item">
                           
                           <div className="flex items-center bg-white border border-slate-200 rounded-[14px] px-2 py-1.5 h-12 w-full sm:w-auto shrink-0 shadow-sm focus-within:border-green-500 transition-colors">
+                            {/* INPUT COM FUNÇÃO ATUALIZADA */}
                             <input 
                               type="number"
                               className="w-16 sm:w-14 bg-transparent text-center font-black text-lg text-slate-800 outline-none hide-arrows" 
                               value={item.amount} 
-                              onChange={(e) => { const n = [...protocols]; n[activeProtocolIndex].meals[mIdx].items[iIdx].amount = e.target.value; setProtocols(n); }} 
+                              onChange={(e) => handleAmountChange(mIdx, iIdx, e.target.value)} 
                             />
                             <div className="h-6 w-[1px] bg-slate-200 mx-1"></div>
                             <select 
@@ -661,7 +737,23 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
                             {item.substitutes.map((sub: any, sIdx: number) => (
                               <div key={sIdx} className="flex items-center gap-3 bg-white border border-slate-200 p-2.5 pl-4 rounded-[16px] group/active hover:border-green-300 transition-colors">
                                 <div className="flex items-center gap-1 bg-slate-50 px-2 py-1.5 rounded-[12px] border border-slate-200 focus-within:border-green-400 transition-colors">
-                                   <input className="w-8 bg-transparent font-black text-xs text-slate-800 text-center outline-none hide-arrows" type="number" value={sub.amount} onChange={(e) => { const n = [...protocols]; n[activeProtocolIndex].meals[mIdx].items[iIdx].substitutes[sIdx].amount = e.target.value; setProtocols(n); }} />
+                                   <input 
+                                     className="w-8 bg-transparent font-black text-xs text-slate-800 text-center outline-none hide-arrows" 
+                                     type="number" 
+                                     value={sub.amount} 
+                                     onChange={(e) => { 
+                                         const n = [...protocols]; 
+                                         const newSubAmtRaw = e.target.value;
+                                         const newSubAmt = parseFloat(newSubAmtRaw) || 0;
+                                         const baseAmt = parseFloat(item.amount) || 1;
+                                         
+                                         // Atualiza o valor E recalcula a Proporção Dourada caso o Coach digite um valor customizado
+                                         n[activeProtocolIndex].meals[mIdx].items[iIdx].substitutes[sIdx].amount = newSubAmtRaw; 
+                                         n[activeProtocolIndex].meals[mIdx].items[iIdx].substitutes[sIdx].ratio_to_base = newSubAmt / baseAmt;
+                                         
+                                         setProtocols(n); 
+                                     }} 
+                                   />
                                    
                                    <div className="h-4 w-[1px] bg-slate-300 mx-1"></div>
                                    <select 
@@ -824,7 +916,7 @@ export default function EditorProPage({ params }: { params: Promise<{ id: string
         </div>
       )}
 
-      <footer className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-xl border-t border-slate-200 z-[100] pb-[max(1.5rem,env(safe-area-bottom))]">
+      <footer className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-xl border-t border-slate-200 z-[100] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         <button onClick={saveDiet} className="max-w-4xl mx-auto w-full bg-slate-900 text-white py-5 rounded-[25px] font-black uppercase tracking-[0.2em] text-xs shadow-xl hover:bg-green-600 transition-all active:scale-[0.98] flex items-center justify-center gap-3">
           <Save size={20} className="text-green-400" /> Confirmar e Enviar Dieta
         </button>

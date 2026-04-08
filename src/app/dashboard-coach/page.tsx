@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image'; // IMPORTANTE: O Image do Next
+import Image from 'next/image';
 import { 
   Users, Plus, Target, Search, Edit2, LogOut, 
   Droplets, Zap, Flame, User as UserIcon, Activity, TrendingUp, Copy,
-  MessageCircle // <--- ADICIONE ESTE AQUI
+  MessageCircle, Send
 } from 'lucide-react';
 
 export default function DashboardCoachPage() {
@@ -40,16 +40,36 @@ export default function DashboardCoachPage() {
     router.push('/login');
   };
 
+  // --- FUNÇÃO CORRIGIDA: DISPARAR CONVITE VIP ---
+  const handleShareInvite = async () => {
+    const appUrl = "https://shapeelitefinal.vercel.app/login"; 
+    
+    // Mensagem unissex, com foco no plano alimentar e com o nome correto do app
+    const message = `Fala! Primeiramente, seja muito bem-vindo(a). Pronto(a) para transformar o seu shape? 🚀\n\nSeu acesso ao QG *Shape Natural* está liberado.\n\nInstale o nosso App Oficial (Shape de Elite) e faça seu login para acessar o seu plano alimentar totalmente personalizado:\n\n👉 ${appUrl}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Convite Shape de Elite',
+          text: message,
+        });
+      } catch (err) {
+        console.log("Compartilhamento cancelado.");
+      }
+    } else {
+      // Fallback para PC (abre WhatsApp Web)
+      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank');
+    }
+  };
+
   const filteredStudents = students.filter(s => 
     s.full_name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   if (loading) return (
     <div className="min-h-[100dvh] bg-slate-900 flex flex-col items-center justify-center relative overflow-hidden">
-      {/* Luz de fundo */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[20rem] h-[20rem] bg-green-600 rounded-full blur-[120px] opacity-20 pointer-events-none"></div>
       
-      {/* Logo Pulsando */}
       <div className="w-32 h-32 sm:w-40 sm:h-40 relative animate-[pulse_2s_ease-in-out_infinite] mb-6">
         <img src="/logo.png" alt="Carregando..." className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(22,163,74,0.4)]" />
       </div>
@@ -61,13 +81,11 @@ export default function DashboardCoachPage() {
   return (
     <div className="min-h-screen bg-slate-50 text-black font-sans flex flex-col relative overflow-x-hidden">
       
-      {/* HEADER ELITE FIXO (PROTEÇÃO CONTRA VAZAMENTO NO TOPO) */}
+      {/* HEADER ELITE FIXO */}
       <div className="fixed top-0 left-0 right-0 z-[100] bg-slate-50/80 backdrop-blur-md px-4 sm:px-6 pt-[max(1rem,env(safe-area-inset-top))] pb-4">
         <header className="max-w-5xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0 bg-white p-5 sm:p-6 rounded-[30px] sm:rounded-[35px] border-2 border-slate-100 shadow-sm relative overflow-hidden">
-          {/* Detalhe de cor no fundo do header */}
           <div className="absolute top-0 right-0 w-32 h-32 bg-green-600 rounded-full blur-[80px] opacity-10 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
 
-          {/* LOGO E TÍTULO */}
           <div className="relative z-10 flex items-center gap-4">
             <div className="w-14 h-14 sm:w-20 sm:h-20 bg-slate-900 rounded-full border-2 border-green-500 overflow-hidden shadow-[0_0_15px_rgba(22,163,74,0.3)] shrink-0 flex items-center justify-center relative">
                <Image 
@@ -91,7 +109,6 @@ export default function DashboardCoachPage() {
             </div>
           </div>
           
-          {/* BOTÕES NO HEADER */}
           <div className="flex gap-3 sm:gap-4 w-full sm:w-auto relative z-10">
             <button onClick={handleLogout} className="bg-slate-50 text-slate-400 border border-slate-200 p-3.5 sm:p-4 rounded-[18px] sm:rounded-[20px] hover:text-red-500 transition-all active:scale-95 shrink-0 flex items-center justify-center">
               <LogOut size={22} />
@@ -109,9 +126,6 @@ export default function DashboardCoachPage() {
         </header>
       </div>
 
-      {/* CONTEÚDO PRINCIPAL COM RECUO COMPENSATÓRIO 
-          pt-[calc(210px...)]: Garante que os cards comecem abaixo do header fixo + notch
-      */}
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 sm:px-6 pt-[calc(210px+env(safe-area-inset-top))] sm:pt-[calc(160px+env(safe-area-inset-top))] pb-[env(safe-area-inset-bottom,120px)] space-y-6 sm:space-y-8">
         
         {/* CARDS DE ESTATÍSTICAS */}
@@ -140,6 +154,14 @@ export default function DashboardCoachPage() {
             </div>
         </div>
 
+        {/* BOTÃO DE DISPARAR CONVITE VIP */}
+        <button 
+          onClick={handleShareInvite}
+          className="w-full bg-slate-900 text-white border border-green-500/30 p-5 sm:p-6 rounded-[25px] sm:rounded-[30px] font-black uppercase text-xs sm:text-sm tracking-[0.2em] hover:bg-green-600 transition-all shadow-xl active:scale-95 flex justify-center items-center gap-3"
+        >
+          <Send size={20} className="text-green-400" /> Disparar Convite VIP
+        </button>
+
         {/* BARRA DE PESQUISA */}
         <div className="relative group">
           <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-green-600 transition-colors" size={22} />
@@ -160,7 +182,6 @@ export default function DashboardCoachPage() {
               
               <div className="p-5 sm:p-6 lg:p-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
                 
-                {/* DADOS DO ALUNO */}
                 <div onClick={() => router.push(`/dashboard-coach/aluno/${student.id}/dieta-atual`)} className="flex items-center gap-5 sm:gap-6 cursor-pointer flex-1 w-full">
                   <div className="relative shrink-0">
                     <div className="w-20 h-20 sm:w-24 sm:h-24 bg-slate-50 rounded-[25px] sm:rounded-[30px] flex items-center justify-center border-2 border-slate-100 overflow-hidden group-hover:border-green-500 transition-all shadow-inner">
@@ -195,9 +216,7 @@ export default function DashboardCoachPage() {
                   </div>
                 </div>
 
-                {/* INDICADORES E BOTÃO AÇÃO */}
                 <div className="flex items-center justify-between lg:justify-end gap-4 sm:gap-6 w-full lg:w-auto border-t lg:border-t-0 lg:border-l border-slate-100 pt-5 lg:pt-0 lg:pl-8">
-                   
                    <div className="flex gap-3 sm:gap-6 flex-1 lg:flex-none justify-center">
                      <div className="flex flex-col items-center gap-1.5 sm:gap-2">
                         <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-[14px] sm:rounded-2xl flex items-center justify-center transition-colors ${student.today_water > 0 ? 'bg-blue-50 text-blue-500 shadow-sm' : 'bg-slate-50 text-slate-200'}`}>
@@ -221,27 +240,24 @@ export default function DashboardCoachPage() {
                      </div>
                    </div>
 
-                   <div className="flex gap-2"> {/* Agrupador para os botões ficarem lado a lado */}
-  
-  {/* BOTÃO WHATSAPP - SEGURO CONTRA ERROS */}
-{student.phone && (
-  <a 
-    href={`https://wa.me/55${(student.phone || '').replace(/\D/g, '')}`}
-    target="_blank"
-    rel="noopener noreferrer"
-    className="bg-green-500 text-white p-4 sm:p-5 rounded-[16px] sm:rounded-[20px] hover:bg-green-600 transition-all shadow-lg active:scale-90 shrink-0 flex items-center justify-center"
-  >
-    <MessageCircle size={20} className="sm:w-[24px] sm:h-[24px]" />
-  </a>
-)}
-
-  <button 
-    onClick={() => router.push(`/dashboard-coach/aluno/${student.id}`)} 
-    className="bg-slate-900 text-white p-4 sm:p-5 rounded-[16px] sm:rounded-[20px] hover:bg-green-600 transition-all shadow-lg active:scale-90 shrink-0 flex items-center justify-center"
-  >
-    <Edit2 size={20} className="sm:w-[24px] sm:h-[24px]" />
-  </button>
-</div>
+                   <div className="flex gap-2">
+                    {student.phone && (
+                      <a 
+                        href={`https://wa.me/55${(student.phone || '').replace(/\D/g, '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-green-500 text-white p-4 sm:p-5 rounded-[16px] sm:rounded-[20px] hover:bg-green-600 transition-all shadow-lg active:scale-90 shrink-0 flex items-center justify-center"
+                      >
+                        <MessageCircle size={20} className="sm:w-[24px] sm:h-[24px]" />
+                      </a>
+                    )}
+                      <button 
+                        onClick={() => router.push(`/dashboard-coach/aluno/${student.id}`)} 
+                        className="bg-slate-900 text-white p-4 sm:p-5 rounded-[16px] sm:rounded-[20px] hover:bg-green-600 transition-all shadow-lg active:scale-90 shrink-0 flex items-center justify-center"
+                      >
+                        <Edit2 size={20} className="sm:w-[24px] sm:h-[24px]" />
+                      </button>
+                    </div>
                 </div>
 
               </div>

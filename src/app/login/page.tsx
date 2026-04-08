@@ -1,14 +1,32 @@
 'use client'
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Lock, User, ArrowRight, Loader2 } from 'lucide-react';
+import InstallScreen from '@/components/InstallScreen'; // IMPORTANDO O PORTEIRO
 
 export default function LoginPage() {
   const router = useRouter();
   const [form, setForm] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
+  
+  // ESTADOS DO PORTEIRO PWA (A TELA COMEÇA TRAVADA POR PADRÃO)
+  const [showInstallGate, setShowInstallGate] = useState(true); 
+  const [isCheckingPWA, setIsCheckingPWA] = useState(true);
+
+  useEffect(() => {
+    // Verifica se já está instalado ou se já recusou
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+    const hasDismissedInstall = sessionStorage.getItem('pwa_dismissed');
+
+    // Se ele JÁ INSTALOU ou já clicou em "Continuar no Navegador" antes, libera o login.
+    if (isStandalone || hasDismissedInstall) {
+      setShowInstallGate(false); 
+    }
+    
+    setIsCheckingPWA(false);
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +60,18 @@ export default function LoginPage() {
     }
   };
 
+  // EVITA PISCAR A TELA ANTES DE LER O DISPOSITIVO DO ALUNO
+  if (isCheckingPWA) return null;
+
+  // SE O ALUNO VEIO DO WHATSAPP E NÃO INSTALOU, O PORTEIRO BARRA AQUI!
+  if (showInstallGate) {
+    return <InstallScreen onContinue={() => {
+      setShowInstallGate(false);
+      sessionStorage.setItem('pwa_dismissed', 'true');
+    }} />;
+  }
+
+  // TELA DE LOGIN (SÓ APARECE SE ELE PASSAR PELO PORTEIRO ACIMA)
   return (
     <div className="min-h-[100dvh] bg-slate-900 flex items-center justify-center p-4 sm:p-6 font-sans relative overflow-hidden">
       
@@ -50,7 +80,7 @@ export default function LoginPage() {
 
       <div className="w-full max-w-md bg-white rounded-[35px] sm:rounded-[40px] p-6 sm:p-10 shadow-2xl relative z-10 animate-in fade-in zoom-in-95 duration-500 border border-slate-100">
         
-        {/* LOGO ELITE LIVRE (Sem círculo, maior e com sombra) */}
+        {/* LOGO ELITE LIVRE */}
         <div className="flex justify-center mb-4">
           <div className="w-48 h-48 sm:w-56 sm:h-56 relative">
              <Image 
@@ -70,7 +100,6 @@ export default function LoginPage() {
 
         <form onSubmit={handleLogin} className="space-y-5">
           
-          {/* INPUT E-MAIL (Com espaçamento forçado: py-4 pr-4 pl-14) */}
           <div className="relative group">
             <User className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-green-500 transition-colors" size={22} />
             <input 
@@ -83,7 +112,6 @@ export default function LoginPage() {
             />
           </div>
 
-          {/* INPUT SENHA (Com espaçamento forçado) */}
           <div className="relative group">
             <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-green-500 transition-colors" size={22} />
             <input 
@@ -96,7 +124,6 @@ export default function LoginPage() {
             />
           </div>
 
-          {/* BOTÃO DE LOGIN */}
           <button 
             type="submit"
             disabled={loading}

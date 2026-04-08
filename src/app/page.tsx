@@ -5,21 +5,16 @@ import { useRouter } from 'next/navigation';
 import { 
   User, 
   Activity, 
-  Scale, 
-  Ruler, 
   LogOut, 
   Clock, 
   ArrowRightLeft, 
-  X, 
-  CheckCircle, 
+  Camera, 
+  CheckCircle,
+  Square,
   FileText, 
   CalendarDays, 
   ShoppingCart, 
-  CheckSquare, 
-  Square, 
-  Camera, 
   Loader2, 
-  Sparkles, 
   Utensils,
   LayoutDashboard,
   TrendingUp, 
@@ -31,43 +26,43 @@ import Biofeedback from '@/components/Biofeedback';
 import FreeMeal from '@/components/FreeMeal';
 import WaterTracker from '@/components/WaterTracker';
 import DietPDFGenerator from '@/components/DietPDFGenerator';
-import ShoppingPDFGenerator from '@/components/ShoppingPDFGenerator';
 import NutriChat from '@/components/NutriChat';
+import InstallScreen from '@/components/InstallScreen';
+
+// IMPORTANDO OS MODAIS MODULARIZADOS
+import SubstituteModal from '@/components/modals/SubstituteModal';
+import ShoppingListModal from '@/components/modals/ShoppingListModal';
+import AiScannerModal from '@/components/modals/AiScannerModal';
 
 export default function Home() {
   const router = useRouter();
   
-  // --- NAVEGAÇÃO DE ABAS ---
   const [activeTab, setActiveTab] = useState<'dieta' | 'painel' | 'evolucao'>('dieta');
+  const [showInstallGate, setShowInstallGate] = useState(false);
 
-  // --- ESTADOS DE USUÁRIO E CARREGAMENTO ---
   const [user, setUser] = useState<any>(null);
   const [studentData, setStudentData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  // --- ESTADOS DO PROTOCOLO E DIETA ---
   const [protocols, setProtocols] = useState<any[]>([]);
   const [activeDay, setActiveDay] = useState<number>(new Date().getDay());
+  const [completedMeals, setCompletedMeals] = useState<string[]>([]);
 
-  // --- ESTADOS DE UI E MODAIS ---
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isShoppingListOpen, setIsShoppingListOpen] = useState(false);
   const [checkedShoppingItems, setCheckedShoppingItems] = useState<string[]>([]);
 
-  // --- ESTADOS DA IA E CAPTURA DE IMAGEM ---
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiFeedback, setAiFeedback] = useState<string | null>(null);
   const [activeMealForPhoto, setActiveMealForPhoto] = useState<any>(null);
 
-  // --- ESTADOS DO CHECK-IN (EVOLUÇÃO) ---
   const [checkinWeight, setCheckinWeight] = useState('');
   const [checkinPhotos, setCheckinPhotos] = useState<{frente: string | null, lado: string | null, costas: string | null}>({ frente: null, lado: null, costas: null });
   const [isSubmittingCheckin, setIsSubmittingCheckin] = useState(false);
   
-  // REFS PARA INPUTS DE ARQUIVO (GALERIA/CÂMERA)
   const fileInputRef = useRef<HTMLInputElement>(null);
   const profileInputRef = useRef<HTMLInputElement>(null);
   const fileFrenteRef = useRef<HTMLInputElement>(null);
@@ -75,35 +70,53 @@ export default function Home() {
   const fileCostasRef = useRef<HTMLInputElement>(null);
 
   const weekDays = [
-      { idx: 0, label: 'Dom' }, 
-      { idx: 1, label: 'Seg' }, 
-      { idx: 2, label: 'Ter' },
-      { idx: 3, label: 'Qua' }, 
-      { idx: 4, label: 'Qui' }, 
-      { idx: 5, label: 'Sex' }, 
-      { idx: 6, label: 'Sáb' }
+      { idx: 0, label: 'Dom' }, { idx: 1, label: 'Seg' }, { idx: 2, label: 'Ter' },
+      { idx: 3, label: 'Qua' }, { idx: 4, label: 'Qui' }, { idx: 5, label: 'Sex' }, { idx: 6, label: 'Sáb' }
   ];
 
-  // --- TRAVA DE SCROLL GLOBAL PARA TODOS OS MODAIS DA PÁGINA ---
+  useEffect(() => {
+    const today = new Date().toLocaleDateString('pt-BR');
+    const stored = localStorage.getItem('shape_completed_meals');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (parsed.date === today) {
+          setCompletedMeals(parsed.meals || []);
+        } else {
+          localStorage.removeItem('shape_completed_meals');
+          setCompletedMeals([]);
+        }
+      } catch (e) {
+        localStorage.removeItem('shape_completed_meals');
+      }
+    }
+  }, []);
+
+  const toggleMealCompleted = (mealId: string) => {
+    setCompletedMeals(prev => {
+      const isCompleted = prev.includes(mealId);
+      const nextMeals = isCompleted ? prev.filter(id => id !== mealId) : [...prev, mealId];
+      const today = new Date().toLocaleDateString('pt-BR');
+      localStorage.setItem('shape_completed_meals', JSON.stringify({ date: today, meals: nextMeals }));
+      return nextMeals;
+    });
+  };
+
   useEffect(() => {
     if (isModalOpen || isShoppingListOpen || isAiModalOpen) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
     }
-    return () => {
-      document.body.style.overflow = '';
-    };
+    return () => { document.body.style.overflow = ''; };
   }, [isModalOpen, isShoppingListOpen, isAiModalOpen]);
 
-  // --- CARREGAMENTO INICIAL DE DADOS ---
   useEffect(() => {
     const storedUser = localStorage.getItem('shape_user');
     if (!storedUser) {
       router.push('/login');
       return;
     }
-    
     const userData = JSON.parse(storedUser);
     setUser(userData);
 
@@ -112,34 +125,25 @@ export default function Home() {
       return;
     }
 
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+    const hasDismissedInstall = sessionStorage.getItem('pwa_dismissed');
+    if (!isStandalone && !hasDismissedInstall) {
+      setShowInstallGate(true);
+    }
+
     async function loadData() {
       try {
         const dietRes = await fetch(`/api/diet/latest?studentId=${userData.id}`);
         if (dietRes.ok) {
           const data = await dietRes.json();
-          
           if (Array.isArray(data) && data.length > 0) {
-              let normalizedProtocols = [];
-              if (!data[0].meals) {
-                 normalizedProtocols = [{
-                     name: 'Protocolo Padrão',
-                     activeDays: [0, 1, 2, 3, 4, 5, 6],
-                     meals: data
-                 }];
-              } else {
-                 normalizedProtocols = data;
-              }
-              setProtocols(normalizedProtocols);
+              setProtocols(!data[0].meals ? [{ name: 'Protocolo Padrão', activeDays: [0, 1, 2, 3, 4, 5, 6], meals: data }] : data);
           }
         }
-        
         const detailsRes = await fetch(`/api/students/details?id=${userData.id}`);
-        if (detailsRes.ok) {
-          const sData = await detailsRes.json();
-          setStudentData(sData);
-        }
+        if (detailsRes.ok) setStudentData(await detailsRes.json());
       } catch (err) { 
-        console.error("Erro ao carregar dados do dashboard:", err); 
+        console.error(err); 
       } finally { 
         setLoading(false); 
       }
@@ -147,39 +151,23 @@ export default function Home() {
     loadData();
   }, [router]);
 
-  // --- LOGOUT DO SISTEMA ---
   const handleLogout = () => {
     localStorage.removeItem('shape_user');
     router.push('/login');
   };
 
-  // --- GESTÃO DA FOTO DE PERFIL ---
   const handleProfileImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-
       const reader = new FileReader();
       reader.onloadend = async () => {
-          const base64String = reader.result as string;
-          
-          // Atualiza visualmente na hora
-          setStudentData((prev: any) => ({ ...prev, photoUrl: base64String }));
-
-          try {
-              const res = await fetch('/api/students/update-photo', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ studentId: user.id, photoUrl: base64String })
-              });
-              if (!res.ok) throw new Error("Falha no upload");
-          } catch (error) {
-              console.error("Erro ao sincronizar foto:", error);
-          }
+          const base64 = reader.result as string;
+          setStudentData((prev: any) => ({ ...prev, photoUrl: base64 }));
+          await fetch('/api/students/update-photo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId: user.id, photoUrl: base64 }) });
       };
       reader.readAsDataURL(file);
   };
 
-  // --- SUBSTITUIÇÕES DE ALIMENTOS ---
   const openSubstituteModal = (item: any) => {
     if (item.substitutes && item.substitutes.length > 0) {
       setSelectedItem(item);
@@ -193,7 +181,6 @@ export default function Home() {
       return found || (protocols.length === 1 ? protocols[0] : null);
   };
 
-  // --- LÓGICA DA LISTA DE COMPRAS ---
   const generateShoppingList = () => {
       const list: {[key: string]: any} = {};
 
@@ -268,7 +255,6 @@ export default function Home() {
       }
   };
 
-  // --- GESTÃO DE CÂMERA E IA ---
   const triggerCamera = (meal: any) => {
       setActiveMealForPhoto(meal);
       if (fileInputRef.current) fileInputRef.current.click();
@@ -277,7 +263,6 @@ export default function Home() {
   const handleImageCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-
       const reader = new FileReader();
       reader.onloadend = () => {
           setPhotoPreview(reader.result as string);
@@ -299,11 +284,8 @@ export default function Home() {
         body: JSON.stringify({ imageBase64: photoPreview, expectedMeal: expectedFood })
       });
       const data = await res.json();
-      if (res.ok) {
-          setAiFeedback(data.result);
-      } else {
-          setAiFeedback("Erro ao analisar imagem: " + (data.error || "Desconhecido"));
-      }
+      if (res.ok) setAiFeedback(data.result);
+      else setAiFeedback("Erro ao analisar imagem: " + (data.error || "Desconhecido"));
     } catch (error) {
       setAiFeedback("Falha na conexão com a IA.");
     } finally {
@@ -311,14 +293,11 @@ export default function Home() {
     }
   };
 
-  // --- GESTÃO DE FOTOS CHECK-IN (EVOLUÇÃO) ---
   const handleCheckinPhoto = (e: React.ChangeEvent<HTMLInputElement>, position: 'frente' | 'lado' | 'costas') => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setCheckinPhotos(prev => ({ ...prev, [position]: reader.result as string }));
-    };
+    reader.onloadend = () => { setCheckinPhotos(prev => ({ ...prev, [position]: reader.result as string })); };
     reader.readAsDataURL(file);
   };
 
@@ -330,56 +309,36 @@ export default function Home() {
     setIsSubmittingCheckin(true);
 
     try {
-      // 1. Função de upload para o Vercel Blob
       const uploadPhoto = async (base64: string, position: string) => {
          const res = await fetch(base64);
          const blob = await res.blob();
          const filename = `${user.id}-${position}-${Date.now()}.jpg`;
-         const uploadRes = await fetch(`/api/upload?filename=${filename}`, {
-             method: 'POST',
-             body: blob
-         });
+         const uploadRes = await fetch(`/api/upload?filename=${filename}`, { method: 'POST', body: blob });
          if (!uploadRes.ok) throw new Error("Falha ao subir foto");
-         const data = await uploadRes.json();
-         return data.url;
+         return (await uploadRes.json()).url;
       };
 
-      // 2. Sobe as 3 fotos
       const [urlFrente, urlLado, urlCostas] = await Promise.all([
           uploadPhoto(checkinPhotos.frente, 'frente'),
           uploadPhoto(checkinPhotos.lado, 'lado'),
           uploadPhoto(checkinPhotos.costas, 'costas')
       ]);
 
-      // 3. Salva no Banco de Dados
       const dbRes = await fetch('/api/evolucao', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            studentId: user.id,
-            peso: checkinWeight,
-            fotoFrente: urlFrente,
-            fotoLado: urlLado,
-            fotoCostas: urlCostas,
+            studentId: user.id, peso: checkinWeight, fotoFrente: urlFrente, fotoLado: urlLado, fotoCostas: urlCostas,
             dataCheckin: new Date().toISOString().split('T')[0]
           })
       });
 
       if (!dbRes.ok) throw new Error("Erro ao salvar avaliação no banco.");
-
       alert("📸 Missão Cumprida! Check-in enviado para o Coach.");
       
-      // ==========================================
-      // A CIRURGIA ESTÁ AQUI: ATUALIZAÇÃO IMEDIATA
-      // ==========================================
-      // Busca os dados do perfil novamente para zerar o cronômetro (next_checkin_date agora é NULL)
       const refreshProfile = await fetch(`/api/students/details?id=${user.id}`);
-      if (refreshProfile.ok) {
-          const updatedData = await refreshProfile.json();
-          setStudentData(updatedData); // Isso apaga o banner amarelo/vermelho na hora!
-      }
+      if (refreshProfile.ok) setStudentData(await refreshProfile.json());
       
-      // Limpa os campos e volta para o painel
       setCheckinWeight('');
       setCheckinPhotos({ frente: null, lado: null, costas: null });
       setActiveTab('painel'); 
@@ -395,36 +354,25 @@ export default function Home() {
   const activeProtocol = getActiveProtocol();
   const shoppingList = generateShoppingList();
 
-  // ==========================================
-  // LÓGICA DE ALERTA DO CHECK-IN (15/30 DIAS)
-  // ==========================================
   const nextCheckinStr = studentData?.next_checkin_date;
-  let checkinStatus = 'none'; // 'none' | 'ok' | 'warning' | 'danger'
+  let checkinStatus = 'none'; 
   let daysToDiff = 0;
   let formattedDate = '';
 
   if (nextCheckinStr) {
-      // Pega a data atual da máquina do aluno e zera as horas (Início do dia local)
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      
-      // Quebra a string "YYYY-MM-DD" que vem do banco para evitar conversão automática de fuso
       const [year, month, day] = nextCheckinStr.split('T')[0].split('-');
       const checkinDate = new Date(Number(year), Number(month) - 1, Number(day));
-      checkinDate.setHours(0, 0, 0, 0); // Garante início do dia
-      
+      checkinDate.setHours(0, 0, 0, 0); 
       formattedDate = checkinDate.toLocaleDateString('pt-BR');
-
       const diffTime = checkinDate.getTime() - today.getTime();
-      // Usamos Math.round para evitar que 0.999 dias vire zero
       daysToDiff = Math.round(diffTime / (1000 * 60 * 60 * 24));
-
       if (daysToDiff > 5) checkinStatus = 'ok';
       else if (daysToDiff > 0 && daysToDiff <= 5) checkinStatus = 'warning';
-      else checkinStatus = 'danger'; // Zero (Hoje) ou Negativo (Atrasado)
+      else checkinStatus = 'danger'; 
   }
 
-  // --- TELA DE CARREGAMENTO ---
   if (loading) {
     return (
       <div className="min-h-[100dvh] bg-slate-900 flex flex-col items-center justify-center gap-4">
@@ -434,28 +382,25 @@ export default function Home() {
     );
   }
 
-  // --- RENDERIZAÇÃO PRINCIPAL DO WEB APP ---
+  if (showInstallGate) {
+    return <InstallScreen onContinue={() => { setShowInstallGate(false); sessionStorage.setItem('pwa_dismissed', 'true'); }} />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-black font-sans flex flex-col relative overflow-x-hidden">
       
-      {/* Inputs invisíveis preservados */}
       <input type="file" accept="image/*" capture="environment" ref={fileInputRef} className="hidden" onChange={handleImageCapture} />
       <input type="file" accept="image/*" ref={profileInputRef} className="hidden" onChange={handleProfileImageChange} />
-
-      {/* Inputs invisíveis do Check-in */}
       <input type="file" accept="image/*" ref={fileFrenteRef} className="hidden" onChange={(e) => handleCheckinPhoto(e, 'frente')} />
       <input type="file" accept="image/*" ref={fileLadoRef} className="hidden" onChange={(e) => handleCheckinPhoto(e, 'lado')} />
       <input type="file" accept="image/*" ref={fileCostasRef} className="hidden" onChange={(e) => handleCheckinPhoto(e, 'costas')} />
 
-      {/* Vacina para o Chat flutuar acima da Nav e não ficar escondido */}
       <div className="relative z-[150]">
          <NutriChat studentName={user?.name || 'Atleta'} protocols={protocols} />
       </div>
 
-      {/* 1. HEADER FIXO (TRAVADO NO TOPO DO VIDRO) */}
       <header className="fixed top-0 left-0 right-0 z-[100] bg-slate-900 text-white px-6 pt-[max(1.2rem,env(safe-area-inset-top))] pb-6 rounded-b-[45px] shadow-2xl border-b-4 border-green-600 overflow-hidden flex items-center justify-between">
         <div className="absolute top-0 right-0 w-80 h-80 bg-green-600 rounded-full blur-[120px] opacity-20 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-        
         <div className="flex items-center gap-4 relative z-10">
           <div onClick={() => profileInputRef.current?.click()} className="w-16 h-16 sm:w-20 sm:h-20 bg-slate-800 rounded-full border-2 border-green-500 flex items-center justify-center overflow-hidden shadow-[0_0_25px_rgba(22,163,74,0.4)] relative group cursor-pointer active:scale-95 transition-all shrink-0">
             {studentData?.photoUrl || user?.photoUrl ? (
@@ -472,16 +417,13 @@ export default function Home() {
             <h1 className="text-xl font-black uppercase italic tracking-tighter leading-none truncate max-w-[150px]">Fala, {user?.name ? user.name.split(' ')[0] : 'Aluno'}!</h1>
           </div>
         </div>
-        
         <button onClick={handleLogout} className="relative z-10 text-white/40 hover:text-red-500 p-3 bg-white/5 rounded-2xl active:scale-90 transition-transform">
           <LogOut size={22} />
         </button>
       </header>
 
-      {/* 2. CONTEÚDO PRINCIPAL COM CALÇO PARA O NOTCH */}
       <main className="flex-1 max-w-4xl mx-auto w-full pt-[calc(140px+env(safe-area-inset-top))] pb-[250px]">
           
-          {/* CONTEÚDO: ABA DIETA */}
           <div className={`${activeTab === 'dieta' ? 'block' : 'hidden'} animate-in fade-in duration-300`}>
              <div className="px-4 sm:px-6 mb-8">
                  <div className="flex items-center justify-between mb-4">
@@ -522,12 +464,16 @@ export default function Home() {
                   </div>
                 ) : (
                   <div className="space-y-6 sm:space-y-8">
-                    {activeProtocol.meals.map((meal: any, index: number) => (
+                    {activeProtocol.meals.map((meal: any, index: number) => {
+                      const mealUniqueId = `${activeProtocol.name}-${activeDay}-${meal.title}-${index}`;
+                      const isMealCompleted = completedMeals.includes(mealUniqueId);
+
+                      return (
                       <div 
                         key={index} 
-                        className="bg-white p-5 sm:p-7 rounded-[35px] sm:rounded-[40px] shadow-[0px_10px_30px_-15px_rgba(0,0,0,0.1)] border border-slate-100 hover:border-green-200 transition-all group relative overflow-hidden"
+                        className={`bg-white p-5 sm:p-7 rounded-[35px] sm:rounded-[40px] shadow-[0px_10px_30px_-15px_rgba(0,0,0,0.1)] border transition-all group relative overflow-hidden ${isMealCompleted ? 'border-green-400 opacity-90' : 'border-slate-100 hover:border-green-200'}`}
                       >
-                        <div className="absolute top-0 left-0 w-1.5 h-full bg-green-600 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        <div className={`absolute top-0 left-0 w-1.5 h-full transition-opacity ${isMealCompleted ? 'bg-green-500 opacity-100' : 'bg-green-600 opacity-0 group-hover:opacity-100'}`}></div>
                         
                         <div className="flex justify-between items-start mb-6 sm:mb-8 pb-4 sm:pb-5 border-b border-slate-50">
                           <div className="space-y-2 pr-2">
@@ -593,14 +539,29 @@ export default function Home() {
                             </div>
                           ))}
                         </div>
+
+                        <button 
+                           onClick={() => toggleMealCompleted(mealUniqueId)}
+                           className={`w-full mt-6 p-4 rounded-[20px] font-black uppercase text-[10px] sm:text-xs tracking-[0.2em] flex items-center justify-center gap-2 transition-all duration-300 active:scale-95 border-2 ${
+                              isMealCompleted 
+                              ? 'bg-green-500 text-white border-green-500 shadow-[0_10px_20px_rgba(22,163,74,0.3)]' 
+                              : 'bg-transparent text-slate-400 border-slate-200 hover:border-green-400 hover:text-green-600'
+                           }`}
+                        >
+                           {isMealCompleted ? (
+                              <><CheckCircle size={18} className="animate-in zoom-in duration-300" /> Refeição Concluída</>
+                           ) : (
+                              <><Square size={18} /> Marcar como Feita</>
+                           )}
+                        </button>
+
                       </div>
-                    ))}
+                    );})}
                   </div>
                 )}
              </div>
           </div>
 
-          {/* CONTEÚDO: ABA PAINEL ELITE */}
           <div className={`${activeTab === 'painel' ? 'block' : 'hidden'} animate-in fade-in duration-300`}>
              <div className="px-4 sm:px-6 space-y-4">
                  <WaterTracker studentId={user?.id} weight={studentData?.weight} />
@@ -628,10 +589,8 @@ export default function Home() {
              </div>
           </div>
 
-          {/* CONTEÚDO: ABA EVOLUÇÃO (CHECK-IN) */}
           <div className={`${activeTab === 'evolucao' ? 'block' : 'hidden'} animate-in fade-in duration-300 px-4 sm:px-6 space-y-6`}>
              
-             {/* HEADER DO CHECK-IN DINÂMICO */}
              <div className={`p-6 rounded-[30px] shadow-xl relative overflow-hidden transform-gpu transition-colors duration-500 ${
                  checkinStatus === 'danger' ? 'bg-red-600 text-white shadow-[0_10px_40px_rgba(220,38,38,0.4)] animate-[pulse_2s_ease-in-out_infinite]' : 
                  checkinStatus === 'warning' ? 'bg-amber-400 text-slate-900 shadow-[0_10px_40px_rgba(251,191,36,0.3)]' : 
@@ -649,25 +608,23 @@ export default function Home() {
                 </div>
 
                 <h2 className="text-2xl sm:text-3xl font-black uppercase italic leading-none relative z-10 pb-1">
-   {checkinStatus === 'danger' ? (
-       <>CHEGOU A<br/><span className="pr-2">HORA!</span></>
-   ) : checkinStatus === 'warning' ? (
-       <>FALTAM<br/><span className="pr-2">{daysToDiff} {daysToDiff === 1 ? 'DIA' : 'DIAS'}</span></>
-   ) : checkinStatus === 'ok' ? (
-       <>AVALIAÇÃO EM<br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-green-600 pr-2">{daysToDiff} DIAS</span></>
-   ) : (
-       /* TEXTO QUANDO NÃO HÁ DATA DEFINIDA */
-       <>AGUARDE A<br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-green-600 pr-2">DEFINIÇÃO</span></>
-   )}
-</h2>
+                   {checkinStatus === 'danger' ? (
+                       <>CHEGOU A<br/><span className="pr-2">HORA!</span></>
+                   ) : checkinStatus === 'warning' ? (
+                       <>FALTAM<br/><span className="pr-2">{daysToDiff} {daysToDiff === 1 ? 'DIA' : 'DIAS'}</span></>
+                   ) : checkinStatus === 'ok' ? (
+                       <>AVALIAÇÃO EM<br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-green-600 pr-2">{daysToDiff} DIAS</span></>
+                   ) : (
+                       <>AGUARDE A<br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-green-600 pr-2">DEFINIÇÃO</span></>
+                   )}
+                </h2>
 
                 <p className={`text-xs font-semibold mt-3 relative z-10 ${checkinStatus === 'warning' ? 'text-slate-800' : 'text-slate-300'}`}>
-   {checkinStatus === 'danger' ? 'Coach aguardando. Envie suas fotos e peso agora.' : 
-    checkinStatus === 'warning' ? `Prepare-se. Sua avaliação é dia ${formattedDate}.` :
-    checkinStatus === 'ok' ? `Agendado para ${formattedDate}.` :
-    /* FRASE PERSONALIZADA AQUI */
-    'Aguarde o Paulo definir a sua próxima data de avaliação.'}
-</p>
+                   {checkinStatus === 'danger' ? 'Coach aguardando. Envie suas fotos e peso agora.' : 
+                    checkinStatus === 'warning' ? `Prepare-se. Sua avaliação é dia ${formattedDate}.` :
+                    checkinStatus === 'ok' ? `Agendado para ${formattedDate}.` :
+                    'Aguarde o Paulo definir a sua próxima data de avaliação.'}
+                </p>
              </div>
 
              <div className="bg-white p-6 rounded-[30px] border border-slate-100 shadow-sm flex flex-col items-center">
@@ -686,20 +643,17 @@ export default function Home() {
 
              <div className="bg-white p-6 rounded-[30px] border border-slate-100 shadow-sm">
                 <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4 text-center">Registro Fotográfico</h4>
-                
                 <div className="grid grid-cols-3 gap-3">
                    <div className="flex flex-col gap-2">
                       <div onClick={() => fileFrenteRef.current?.click()} className="aspect-[3/4] bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center text-slate-400 hover:border-green-400 hover:text-green-500 transition-all cursor-pointer relative overflow-hidden group">
                          {checkinPhotos.frente ? <img src={checkinPhotos.frente} alt="Frente" className="w-full h-full object-cover" /> : <><Camera size={24} className="mb-2 group-hover:scale-110 transition-transform" /><span className="text-[8px] font-black uppercase tracking-widest">Frente</span></>}
                       </div>
                    </div>
-
                    <div className="flex flex-col gap-2">
                       <div onClick={() => fileLadoRef.current?.click()} className="aspect-[3/4] bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center text-slate-400 hover:border-green-400 hover:text-green-500 transition-all cursor-pointer relative overflow-hidden group">
                          {checkinPhotos.lado ? <img src={checkinPhotos.lado} alt="Lado" className="w-full h-full object-cover" /> : <><Camera size={24} className="mb-2 group-hover:scale-110 transition-transform" /><span className="text-[8px] font-black uppercase tracking-widest">Lado</span></>}
                       </div>
                    </div>
-
                    <div className="flex flex-col gap-2">
                       <div onClick={() => fileCostasRef.current?.click()} className="aspect-[3/4] bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center text-slate-400 hover:border-green-400 hover:text-green-500 transition-all cursor-pointer relative overflow-hidden group">
                          {checkinPhotos.costas ? <img src={checkinPhotos.costas} alt="Costas" className="w-full h-full object-cover" /> : <><Camera size={24} className="mb-2 group-hover:scale-110 transition-transform" /><span className="text-[8px] font-black uppercase tracking-widest">Costas</span></>}
@@ -719,236 +673,51 @@ export default function Home() {
 
       </main>
 
-      {/* 3. NAVEGAÇÃO INFERIOR FIXA (ESTILO APP NATIVO COM 3 ABAS) */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-slate-200 p-2 pb-[max(1.2rem,env(safe-area-inset-bottom))] flex justify-center z-[110] shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
          <div className="w-full max-w-md flex bg-slate-50 p-1.5 rounded-[22px] mx-4 border border-slate-100 gap-1">
-            <button onClick={() => setActiveTab('dieta')}
-               className={`flex-1 flex flex-col items-center justify-center p-3 rounded-[16px] transition-all
-                  ${activeTab === 'dieta' ? 'bg-slate-900 text-green-400 shadow-md scale-[1.02]' : 'text-slate-400'}`}>
+            <button onClick={() => setActiveTab('dieta')} className={`flex-1 flex flex-col items-center justify-center p-3 rounded-[16px] transition-all ${activeTab === 'dieta' ? 'bg-slate-900 text-green-400 shadow-md scale-[1.02]' : 'text-slate-400'}`}>
                <Utensils size={20} className="mb-1" /><span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest">Dieta</span>
             </button>
-            <button onClick={() => setActiveTab('painel')}
-               className={`flex-1 flex flex-col items-center justify-center p-3 rounded-[16px] transition-all
-                  ${activeTab === 'painel' ? 'bg-slate-900 text-green-400 shadow-md scale-[1.02]' : 'text-slate-400'}`}>
+            <button onClick={() => setActiveTab('painel')} className={`flex-1 flex flex-col items-center justify-center p-3 rounded-[16px] transition-all ${activeTab === 'painel' ? 'bg-slate-900 text-green-400 shadow-md scale-[1.02]' : 'text-slate-400'}`}>
                <LayoutDashboard size={20} className="mb-1" /><span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest">Painel</span>
             </button>
-            <button onClick={() => setActiveTab('evolucao')}
-               className={`flex-1 flex flex-col items-center justify-center p-3 rounded-[16px] transition-all relative
-                  ${activeTab === 'evolucao' ? 'bg-slate-900 text-green-400 shadow-md scale-[1.02]' : 'text-slate-400'}`}>
-               
-               {/* BOLINHA VERMELHA DE ALERTA SE O DIA DO CHECK-IN CHEGOU OU PASSOU */}
-               {checkinStatus === 'danger' && (
-                  <span className="absolute top-2 right-6 sm:right-8 w-2.5 h-2.5 bg-red-500 border-2 border-slate-50 rounded-full animate-ping"></span>
-               )}
-               {checkinStatus === 'danger' && (
-                  <span className="absolute top-2 right-6 sm:right-8 w-2.5 h-2.5 bg-red-500 border-2 border-slate-50 rounded-full"></span>
-               )}
-
+            <button onClick={() => setActiveTab('evolucao')} className={`flex-1 flex flex-col items-center justify-center p-3 rounded-[16px] transition-all relative ${activeTab === 'evolucao' ? 'bg-slate-900 text-green-400 shadow-md scale-[1.02]' : 'text-slate-400'}`}>
+               {checkinStatus === 'danger' && <span className="absolute top-2 right-6 sm:right-8 w-2.5 h-2.5 bg-red-500 border-2 border-slate-50 rounded-full animate-ping"></span>}
+               {checkinStatus === 'danger' && <span className="absolute top-2 right-6 sm:right-8 w-2.5 h-2.5 bg-red-500 border-2 border-slate-50 rounded-full"></span>}
                <TrendingUp size={20} className="mb-1" /><span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest">Evolução</span>
             </button>
          </div>
       </nav>
 
-      {/* --- MODAL DA LISTA DE COMPRAS --- */}
-      {isShoppingListOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6">
-          <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md" onClick={() => setIsShoppingListOpen(false)} />
-          
-          <div className="bg-white w-full max-w-2xl max-h-[85dvh] rounded-[35px] sm:rounded-[40px] flex flex-col relative z-10 animate-in zoom-in-95 duration-300 shadow-2xl overflow-hidden">
-            <div className="bg-slate-900 border-b-4 border-green-600 p-6 sm:p-8 text-white relative shrink-0">
-               <button 
-                 onClick={() => setIsShoppingListOpen(false)} 
-                 className="absolute top-4 sm:top-6 right-4 sm:right-6 bg-white/10 hover:bg-white/20 p-2 sm:p-3 rounded-full transition-colors text-white min-w-[44px] min-h-[44px] flex items-center justify-center z-20"
-               >
-                 <X size={20} />
-               </button>
-               
-               <div className="flex justify-between items-center mb-4 sm:mb-6 pr-12 relative z-10">
-                  <div className="w-14 h-14 bg-white/10 rounded-[20px] flex items-center justify-center backdrop-blur-md border border-white/5 shrink-0">
-                     <ShoppingCart size={28} className="text-green-400" />
-                  </div>
-                  <div className="shrink-0">
-                    <ShoppingPDFGenerator studentName={user?.name || 'Aluno'} shoppingList={shoppingList} />
-                  </div>
-               </div>
-               
-               <h3 className="text-2xl sm:text-3xl font-black uppercase italic leading-none mb-1 tracking-tighter truncate">Minha lista de compras</h3>
-               <p className="text-[9px] font-bold uppercase opacity-80 tracking-widest text-green-400 truncate">Calculado de todos os protocolos</p>
-            </div>
+      {/* --- INSERINDO OS MODAIS MODULARIZADOS AQUI --- */}
+      <SubstituteModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        selectedItem={selectedItem} 
+      />
 
-            <div className="flex-1 overflow-y-auto p-5 sm:p-8 bg-slate-50 space-y-6 custom-scrollbar">
-               {Object.keys(shoppingList).length === 0 ? (
-                   <div className="text-center py-20 opacity-40">
-                       <ShoppingCart size={48} className="mx-auto mb-4" />
-                       <p className="font-black uppercase text-xs tracking-[0.2em]">Sua lista está vazia</p>
-                   </div>
-               ) : (
-                   Object.keys(shoppingList).map((category, cIdx) => (
-                       <div key={cIdx} className="bg-white rounded-[25px] border border-slate-200 p-5 shadow-sm">
-                           <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900 mb-4 border-b border-slate-100 pb-2 flex items-center gap-2 truncate">
-                               <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse shrink-0"></div>
-                               {category}
-                           </h4>
-                           <div className="grid grid-cols-1 gap-3">
-                               {shoppingList[category].map((item: any, iIdx: number) => {
-                                   const isChecked = checkedShoppingItems.includes(item.name);
-                                   return (
-                                       <button 
-                                          key={iIdx} 
-                                          onClick={() => toggleShoppingItem(item.name)} 
-                                          className={`w-full flex justify-between items-center p-3 rounded-2xl border transition-all min-h-[44px] ${isChecked ? 'bg-slate-50 border-transparent opacity-50 grayscale' : 'bg-white border-slate-100 hover:border-green-400'}`}
-                                       >
-                                          <div className="flex items-center gap-3 text-left overflow-hidden">
-                                              {isChecked ? <CheckSquare size={20} className="text-green-500 shrink-0" /> : <Square size={20} className="text-slate-300 shrink-0" />}
-                                              <span className={`text-sm font-bold uppercase italic truncate ${isChecked ? 'line-through text-slate-400' : 'text-slate-800'}`}>
-                                                  {item.name}
-                                              </span>
-                                          </div>
-                                          <div className="bg-slate-100 px-3 py-1.5 rounded-[12px] shrink-0 text-right shadow-inner ml-2">
-                                              <span className="font-black text-base text-slate-900 leading-none">{item.amount}</span>
-                                              <span className="text-[9px] font-black uppercase ml-1 text-green-600">{item.unit}</span>
-                                          </div>
-                                       </button>
-                                   );
-                               })}
-                           </div>
-                       </div>
-                   ))
-               )}
-            </div>
+      <ShoppingListModal 
+        isOpen={isShoppingListOpen} 
+        onClose={() => setIsShoppingListOpen(false)} 
+        shoppingList={shoppingList}
+        checkedShoppingItems={checkedShoppingItems}
+        toggleShoppingItem={toggleShoppingItem}
+        studentName={user?.name || 'Aluno'}
+      />
 
-            <div className="p-5 bg-white border-t border-slate-100 shrink-0">
-               <button 
-                 onClick={() => setIsShoppingListOpen(false)} 
-                 className="w-full bg-slate-900 text-white p-5 rounded-[25px] font-black uppercase text-sm tracking-[0.2em] hover:bg-green-600 transition-all shadow-xl active:scale-95 flex justify-center items-center gap-2 min-h-[56px]"
-               >
-                 Concluir Compra
-               </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AiScannerModal 
+        isOpen={isAiModalOpen} 
+        onClose={() => setIsAiModalOpen(false)} 
+        photoPreview={photoPreview}
+        isAnalyzing={isAnalyzing}
+        aiFeedback={aiFeedback}
+        analyzeImage={analyzeImage}
+      />
 
-      {/* --- MODAL DA IA --- */}
-      {isAiModalOpen && photoPreview && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6">
-          <div className="absolute inset-0 bg-slate-900/95 backdrop-blur-xl" onClick={() => !isAnalyzing && setIsAiModalOpen(false)} />
-          
-          <div className="bg-white w-full max-w-lg rounded-[40px] sm:rounded-[50px] overflow-hidden relative z-10 shadow-[0_0_100px_rgba(22,163,74,0.2)] animate-in zoom-in-95 duration-500 flex flex-col max-h-[90dvh]">
-            <div className="p-5 sm:p-6 bg-slate-50 flex justify-between items-center border-b border-slate-200 shrink-0">
-                <div className="flex items-center gap-2 sm:gap-3 text-green-600">
-                    <Sparkles size={20} className="sm:w-[24px] sm:h-[24px] animate-pulse" />
-                    <h3 className="font-black uppercase italic text-xs sm:text-sm tracking-widest">IA Shape Natural</h3>
-                </div>
-                {!isAnalyzing && (
-                    <button 
-                      onClick={() => setIsAiModalOpen(false)} 
-                      className="p-2 sm:p-3 text-slate-400 hover:text-red-500 rounded-full bg-white shadow-md border border-slate-100 transition-all min-w-[44px] min-h-[44px] flex items-center justify-center"
-                    >
-                      <X size={18} className="sm:w-[20px] sm:h-[20px]"/>
-                    </button>
-                )}
-            </div>
-
-            <div className="p-5 sm:p-8 overflow-y-auto custom-scrollbar">
-                <div className="w-full h-48 sm:h-64 bg-slate-200 rounded-[25px] sm:rounded-[35px] overflow-hidden mb-6 sm:mb-8 border-4 border-white shadow-2xl relative group shrink-0">
-                    <img src={photoPreview} alt="Sua refeição" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
-                </div>
-
-                {!aiFeedback ? (
-                    <button 
-                       onClick={analyzeImage} 
-                       disabled={isAnalyzing} 
-                       className="w-full bg-slate-900 text-white p-5 sm:p-6 rounded-[25px] sm:rounded-[30px] font-black uppercase text-xs sm:text-sm tracking-[0.2em] hover:bg-green-600 transition-all shadow-xl shadow-green-600/30 flex justify-center items-center gap-3 sm:gap-4 disabled:opacity-70 disabled:cursor-not-allowed min-h-[56px]"
-                    >
-                       {isAnalyzing ? (
-                           <><Loader2 size={20} className="sm:w-[24px] sm:h-[24px] animate-spin text-green-400" /> Escaneando Macros...</>
-                       ) : (
-                           <><Sparkles size={20} className="sm:w-[24px] sm:h-[24px] text-green-400" /> Validar Refeição</>
-                       )}
-                    </button>
-                ) : (
-                    <div className="bg-green-50/50 border-2 border-green-100 p-5 sm:p-7 rounded-[25px] sm:rounded-[35px] animate-in fade-in duration-500">
-                        <div className="flex items-center gap-2 mb-3 sm:mb-4">
-                            <CheckCircle size={16} className="sm:w-[18px] sm:h-[18px] text-green-500" />
-                            <p className="text-[10px] sm:text-[11px] font-black text-green-700 uppercase tracking-widest">Feedback do Coach Virtual:</p>
-                        </div>
-                        <p className="text-sm sm:text-base font-semibold text-slate-800 whitespace-pre-line leading-relaxed italic">
-                            "{aiFeedback}"
-                        </p>
-                        <button 
-                            onClick={() => setIsAiModalOpen(false)} 
-                            className="w-full mt-6 sm:mt-8 bg-slate-900 text-white p-4 rounded-2xl font-black uppercase text-[10px] sm:text-xs tracking-widest hover:bg-green-600 transition-all shadow-lg min-h-[48px]"
-                        >
-                            Fechar Análise
-                        </button>
-                    </div>
-                )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* --- MODAL DE SUBSTITUIÇÃO --- */}
-      {isModalOpen && selectedItem && (
-        <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center sm:p-6">
-          <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md" onClick={() => setIsModalOpen(false)} />
-          
-          <div className="bg-white w-full max-w-lg rounded-t-[40px] sm:rounded-[50px] overflow-hidden relative z-10 animate-in slide-in-from-bottom duration-500 shadow-2xl pb-[env(safe-area-inset-bottom,0px)] max-h-[85dvh] flex flex-col">
-            <div className="bg-slate-900 border-b-4 border-green-600 p-6 sm:p-8 pt-[max(1.5rem,env(safe-area-inset-top))] text-white relative shrink-0">
-               <button 
-                 onClick={() => setIsModalOpen(false)} 
-                 className="absolute top-4 sm:top-6 right-4 sm:right-6 bg-white/10 hover:bg-white/20 p-2 sm:p-3 rounded-full transition-colors text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
-               >
-                 <X size={20} />
-               </button>
-               <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] sm:tracking-[0.3em] opacity-80 mb-2 sm:mb-3 block text-green-400">Opções Inteligentes:</span>
-               <h3 className="text-2xl sm:text-3xl font-black uppercase italic leading-none tracking-tight pr-12 line-clamp-2">{selectedItem.name}</h3>
-            </div>
-
-            <div className="p-5 sm:p-8 bg-white flex-1 overflow-hidden flex flex-col">
-              <div className="space-y-3 sm:space-y-4 overflow-y-auto custom-scrollbar flex-1 pr-1 sm:pr-2">
-                {selectedItem.substitutes.map((sub: any, idx: number) => (
-                  <div key={idx} className="flex justify-between items-center p-4 sm:p-5 bg-white rounded-[25px] sm:rounded-[30px] border border-slate-100 shadow-sm group hover:border-green-500 hover:bg-green-50/30 transition-all active:scale-[0.98]">
-                    <div className="flex items-center gap-3 sm:gap-5 overflow-hidden">
-                      <div className="w-14 h-14 sm:w-16 sm:h-16 shrink-0 rounded-[18px] sm:rounded-[22px] bg-slate-50 border border-slate-100 flex flex-col items-center justify-center text-slate-800 group-hover:bg-white group-hover:border-green-200 transition-all shadow-inner">
-                        <span className="text-base sm:text-lg font-black leading-none">{sub.amount}</span>
-                        <span className="text-[8px] sm:text-[9px] font-black uppercase mt-1 text-green-600">{sub.unit}</span>
-                      </div>
-                      <span className="font-black uppercase italic text-slate-700 text-xs sm:text-sm group-hover:text-green-800 transition-colors line-clamp-2 whitespace-normal">
-                        {sub.name}
-                      </span>
-                    </div>
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 shrink-0 rounded-full border-2 border-slate-100 flex items-center justify-center group-hover:border-green-500 group-hover:bg-green-500 group-hover:text-white transition-all ml-2">
-                        <CheckCircle size={16} className="sm:w-[20px] sm:h-[20px] text-slate-200 group-hover:text-white transition-colors" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <button 
-                onClick={() => setIsModalOpen(false)} 
-                className="w-full bg-slate-900 text-white p-5 sm:p-6 rounded-[25px] sm:rounded-[30px] font-black uppercase mt-4 sm:mt-6 hover:bg-green-600 transition-all shadow-2xl active:scale-95 tracking-[0.2em] shrink-0 min-h-[56px] mb-[max(env(safe-area-inset-bottom,10px),10px)] flex justify-center items-center gap-2"
-              >
-                Voltar ao Plano
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* --- ESTILOS GLOBAIS --- */}
       <style jsx global>{`
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        
-        #nutrichat-trigger, 
-        .fixed.bottom-4.right-4,
-        button.fixed.bottom-6.right-6 {
-          bottom: 110px !important;
-          z-index: 160 !important;
-        }
+        #nutrichat-trigger, .fixed.bottom-4.right-4, button.fixed.bottom-6.right-6 { bottom: 110px !important; z-index: 160 !important; }
       `}</style>
     </div>
   );

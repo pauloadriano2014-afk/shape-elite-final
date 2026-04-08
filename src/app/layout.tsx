@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 // CONFIGURAÇÃO DE VIEWPORT PARA PWA (IMPEDE ZOOM INDESEJADO E OCUPA TELA TODA)
 export const viewport: Viewport = {
-  themeColor: "#0f172a", // Corrigido para o Preto Slate Elite (combina com o topo do App)
+  themeColor: "#0f172a", // Preto Slate Elite
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -42,7 +42,8 @@ export const metadata: Metadata = {
     siteName: 'Shape Elite',
     images: [
       {
-        url: '/logo.png', // Puxa a sua logo bonita pra miniatura do WhatsApp
+        // A MÁGICA ESTÁ AQUI: URL Absoluta para o WhatsApp não bugar!
+        url: 'https://shapeelitefinal.vercel.app/logo.png', 
         width: 800,
         height: 800,
         alt: 'Shape Elite Logo',
@@ -65,6 +66,23 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <link rel="apple-touch-icon" href="/icon-192x192.png" />
+        
+        {/* REGISTRO DO SERVICE WORKER PARA O BOTÃO DE INSTALAR FUNCIONAR */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                  navigator.serviceWorker.register('/sw.js').then(function(registration) {
+                    console.log('PWA ServiceWorker registrado com sucesso!');
+                  }, function(err) {
+                    console.log('Falha no registro do PWA: ', err);
+                  });
+                });
+              }
+            `,
+          }}
+        />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
