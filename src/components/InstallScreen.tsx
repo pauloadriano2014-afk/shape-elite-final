@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react';
-import { Share, Smartphone, CheckCircle, ArrowRight, Plus, MoreHorizontal, Trophy } from 'lucide-react';
+import { Share, Smartphone, CheckCircle, ArrowRight, Plus, MoreHorizontal, DownloadCloud } from 'lucide-react';
 
 interface InstallScreenProps {
   onContinue: () => void;
@@ -12,7 +12,7 @@ export default function InstallScreen({ onContinue }: InstallScreenProps) {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isIOS, setIsIOS] = useState(false);
   const [isChromeIOS, setIsChromeIOS] = useState(false);
-  const [hasJustInstalled, setHasJustInstalled] = useState(false); // NOVO RADAR DE INSTALAÇÃO
+  const [hasJustInstalled, setHasJustInstalled] = useState(false); 
 
   useEffect(() => {
     const checkStandalone = () => {
@@ -32,17 +32,13 @@ export default function InstallScreen({ onContinue }: InstallScreenProps) {
     const userAgent = window.navigator.userAgent.toLowerCase();
     const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
     setIsIOS(isIOSDevice);
-    
-    if (isIOSDevice && /crios/.test(userAgent)) {
-      setIsChromeIOS(true);
-    }
+    if (isIOSDevice && /crios/.test(userAgent)) setIsChromeIOS(true);
 
     const handler = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
     };
 
-    // RADAR: Detecta quando o App termina de ser instalado no Android/Chrome!
     const installHandler = () => {
       setHasJustInstalled(true);
     };
@@ -62,7 +58,7 @@ export default function InstallScreen({ onContinue }: InstallScreenProps) {
     const { outcome } = await deferredPrompt.userChoice;
     if (outcome === 'accepted') {
       setDeferredPrompt(null);
-      // No Android as vezes o appinstalled já dispara, mas garantimos aqui também
+      // Mostra a tela de "Instalando" após o aceite no Android
       setTimeout(() => setHasJustInstalled(true), 1500); 
     }
   };
@@ -81,20 +77,20 @@ export default function InstallScreen({ onContinue }: InstallScreenProps) {
     );
   }
 
-  // TELA DE SUCESSO (MOSTRADA ASSIM QUE A INSTALAÇÃO TERMINA)
+  // NOVA TELA DE "INSTALANDO"
   if (hasJustInstalled) {
     return (
       <div className="fixed inset-0 w-screen h-[100dvh] z-[9999] bg-slate-950 flex flex-col items-center justify-center p-6 text-center touch-none overscroll-none overflow-hidden">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-80 h-80 bg-green-600 rounded-full blur-[150px] opacity-20 pointer-events-none"></div>
-        <div className="w-24 h-24 bg-green-500 rounded-[30px] flex items-center justify-center mb-8 shadow-[0_0_40px_rgba(22,163,74,0.4)] animate-in zoom-in duration-500">
-          <Trophy size={48} className="text-white" />
+        <div className="w-24 h-24 bg-slate-800 border-2 border-green-500 rounded-[30px] flex items-center justify-center mb-8 shadow-[0_0_40px_rgba(22,163,74,0.3)] animate-pulse">
+          <DownloadCloud size={48} className="text-green-400" />
         </div>
         <h2 className="text-white text-3xl font-black uppercase italic tracking-tighter leading-tight mb-4">
-          INSTALAÇÃO<br/><span className="text-green-500">CONCLUÍDA!</span>
+          DOWNLOAD<br/><span className="text-green-500">INICIADO!</span>
         </h2>
         <p className="text-slate-300 text-base font-medium max-w-xs mx-auto leading-relaxed">
-          Você já pode fechar o navegador.<br/><br/>
-          Vá até a tela inicial do seu celular, abra o app <strong className="text-white">Shape Elite</strong> e faça seu cadastro.
+          O sistema do seu celular está criando o App em segundo plano.<br/><br/>
+          Aguarde uns <strong className="text-white">10 segundos</strong> até o ícone do Shape Elite aparecer na sua tela inicial e abra-o para continuar.
         </p>
       </div>
     );
@@ -112,7 +108,7 @@ export default function InstallScreen({ onContinue }: InstallScreenProps) {
           SHAPE <span className="text-green-500">ELITE</span>
         </h1>
         <p className="text-slate-400 text-center mt-4 text-sm font-medium leading-relaxed">
-          Instale o App oficial para ter acesso rápido ao seu plano e criar sua conta.
+          Instale o App oficial para ter acesso rápido ao seu plano e notificações do Coach.
         </p>
 
         <div className="w-full mt-10 space-y-4">
@@ -177,7 +173,6 @@ export default function InstallScreen({ onContinue }: InstallScreenProps) {
                   </div>
                 </div>
               )}
-
             </div>
           ) : (
             <button
@@ -193,7 +188,7 @@ export default function InstallScreen({ onContinue }: InstallScreenProps) {
             onClick={onContinue}
             className="w-full py-4 mt-2 text-slate-500 hover:text-white text-[10px] font-black uppercase tracking-[0.2em] transition-colors flex items-center justify-center gap-2"
           >
-            Já tenho conta (Entrar) <ArrowRight size={12} />
+            Continuar pelo navegador <ArrowRight size={12} />
           </button>
         </div>
       </div>

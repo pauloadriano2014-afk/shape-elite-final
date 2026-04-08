@@ -21,6 +21,9 @@ export default function CadastroPage() {
   const [isCheckingPWA, setIsCheckingPWA] = useState(true);
 
   useEffect(() => {
+    // A MÁGICA COMEÇA AQUI: Cola o post-it na memória dizendo que ele quer se cadastrar
+    localStorage.setItem('shape_invite_intent', '/cadastro');
+
     // Verifica se já está instalado ou se já recusou
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
     const hasDismissedInstall = sessionStorage.getItem('pwa_dismissed');

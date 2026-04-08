@@ -113,10 +113,19 @@ export default function Home() {
 
   useEffect(() => {
     const storedUser = localStorage.getItem('shape_user');
+    
+    // --- LEITOR DE POST-IT: SE NÃO ESTIVER LOGADO, VERIFICA PRA ONDE DEVE IR ---
     if (!storedUser) {
-      router.push('/login');
+      const intent = localStorage.getItem('shape_invite_intent');
+      if (intent === '/cadastro') {
+        localStorage.removeItem('shape_invite_intent'); // Limpa pra não ficar em loop
+        router.push('/cadastro'); // Joga direto pro formulário de cadastro!
+      } else {
+        router.push('/login'); // Se não tiver Post-it, é um usuário comum deslogado
+      }
       return;
     }
+    
     const userData = JSON.parse(storedUser);
     setUser(userData);
 
