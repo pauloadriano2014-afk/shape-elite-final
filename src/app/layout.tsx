@@ -12,9 +12,8 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// CONFIGURAÇÃO DE VIEWPORT PARA PWA (IMPEDE ZOOM INDESEJADO E OCUPA TELA TODA)
 export const viewport: Viewport = {
-  themeColor: "#0f172a", // Preto Slate Elite
+  themeColor: "#0f172a",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -22,11 +21,16 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-// METADADOS DE ELITE PARA RECONHECIMENTO COMO APP E LINKS (WHATSAPP)
 export const metadata: Metadata = {
   title: "Shape Elite | Paulo Adriano Team",
   description: "Aplicativo exclusivo de acompanhamento, dieta e alta performance.",
   manifest: "/manifest.json",
+  // FORÇA O FAVICON A SER A SUA LOGO:
+  icons: {
+    icon: '/logo.png',
+    shortcut: '/logo.png',
+    apple: '/logo.png',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -42,8 +46,8 @@ export const metadata: Metadata = {
     siteName: 'Shape Elite',
     images: [
       {
-        // A MÁGICA ESTÁ AQUI: URL Absoluta para o WhatsApp não bugar!
-        url: 'https://shapeelitefinal.vercel.app/logo.png', 
+        // GATILHO V3 PARA QUEBRAR O CACHE DO WHATSAPP DE VEZ
+        url: 'https://shapeelitefinal.vercel.app/logo.png?v=3', 
         width: 800,
         height: 800,
         alt: 'Shape Elite Logo',
@@ -60,21 +64,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" className="antialiased">
+    <html lang="pt-BR" className="antialiased bg-slate-950">
       <head>
-        {/* TAGS ADICIONAIS PARA FORÇAR MODO STANDALONE NO IOS */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <link rel="apple-touch-icon" href="/icon-192x192.png" />
         
-        {/* REGISTRO DO SERVICE WORKER PARA O BOTÃO DE INSTALAR FUNCIONAR */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
               if ('serviceWorker' in navigator) {
                 window.addEventListener('load', function() {
                   navigator.serviceWorker.register('/sw.js').then(function(registration) {
-                    console.log('PWA ServiceWorker registrado com sucesso!');
+                    console.log('PWA ServiceWorker registrado');
                   }, function(err) {
                     console.log('Falha no registro do PWA: ', err);
                   });
@@ -85,7 +86,7 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-slate-950 overscroll-none touch-none`}
       >
         {children}
       </body>
